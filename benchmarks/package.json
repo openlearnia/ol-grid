@@ -1,0 +1,19 @@
+{
+  "name": "@ol-grid/benchmarks",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bundle-size": "node ./scripts/bundle-size.mjs",
+    "preperf:100k": "pnpm --filter @ol-grid/vanilla... run build",
+    "perf:100k": "vite --config ./perf-100k/vite.config.ts",
+    "build:perf": "vite build --config ./perf-100k/vite.config.ts"
+  },
+  "dependencies": {
+    "@ol-grid/vanilla": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2"
+  }
+}

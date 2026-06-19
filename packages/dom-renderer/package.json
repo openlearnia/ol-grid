@@ -1,0 +1,35 @@
+{
+  "name": "@ol-grid/dom-renderer",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@ol-grid/core": "workspace:*"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.10.6",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.2"
+  }
+}

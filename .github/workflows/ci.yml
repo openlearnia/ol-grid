@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Bundle size gate
+        run: pnpm --filter @ol-grid/benchmarks run bundle-size
+
+      - name: Build vanilla demo
+        run: pnpm --filter @ol-grid/example-vanilla run build
+
+      - name: axe-core accessibility audit
+        run: |
+          npx --yes serve examples/vanilla/dist -l 4173 &
+          SERVER_PID=$!
+          sleep 2
+          npx --yes @axe-core/cli http://localhost:4173 --exit
+          kill $SERVER_PID

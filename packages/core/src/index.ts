@@ -1,0 +1,76 @@
+import { createGridEngine, GridEngine } from "./engine/grid-engine.js";
+import { EventBus } from "./events/event-bus.js";
+import { ModuleRegistry } from "./modules/module-registry.js";
+import { createGridStore } from "./store/grid-store.js";
+
+export type { GridApi, CsvExportParams, StartEditingCellParams } from "./types/api.js";
+export type {
+  ColumnDef,
+  ColumnState,
+  ColumnGroupState,
+  ApplyColumnStateParams,
+  SortComparatorFn,
+  ValueGetterParams,
+  ValueParserParams,
+  ValueSetterParams,
+  ValueFormatterParams,
+  EditableCallbackParams,
+} from "./types/column.js";
+export type { CellRendererParams, CellRendererFn } from "./types/cell-renderer.js";
+export type {
+  GridReadyEvent,
+  CellClickedEvent,
+  SelectionChangedEvent,
+  SortChangedEvent,
+  FilterChangedEvent,
+  CellValueChangedEvent,
+  ColumnResizedEvent,
+  RowDataUpdatedEvent,
+  GridEvents,
+} from "./types/events.js";
+export type { GridOptions, GetRowIdParams, RowSelectionOption, SortModel } from "./types/options.js";
+export type {
+  RendererAdapter,
+  RenderFrame,
+  RenderColumn,
+  RenderRow,
+  RenderCell,
+} from "./types/renderer.js";
+export type { RowNode, RowModelType, RowModelMeta } from "./types/row.js";
+export type { GridState, SelectionState, SortingState, CellPosition, EditingState } from "./types/state.js";
+export type { GridStore, GridAction, StoreListener, Unsubscribe, StateSelector } from "./store/grid-store.js";
+export type { GridModule, RowModelStage, RowModelStageContext } from "./modules/module-registry.js";
+export type { GridContext } from "./modules/grid-context.js";
+
+export { GridEngine, createGridEngine };
+export { EventBus };
+export { ModuleRegistry };
+export { createGridStore };
+export { createGridContext } from "./modules/grid-context.js";
+export {
+  createSelectionState,
+  deselectAllRows,
+  getHeaderCheckboxState,
+  handleRowClickSelection,
+  isRowSelected,
+  rowSelectionToMode,
+  selectAllRows,
+  toggleRowSelection,
+  toggleSelectAll,
+} from "./selection/selection-manager.js";
+export type { HeaderCheckboxState } from "./selection/selection-manager.js";
+export { SELECTION_COLUMN_ID } from "./column/column-model.js";
+export { resolveColId } from "./column/resolve-col-id.js";
+export { normalizeQuickFilterText, rowMatchesQuickFilter, filterRowsByQuickFilter } from "./filter/quick-filter.js";
+export { generateCsv, downloadCsvContent } from "./export/csv-export.js";
+export { isCellEditable } from "./row/is-cell-editable.js";
+export { setCellValue } from "./row/set-cell-value.js";
+export { commitCellEdit } from "./row/commit-cell-edit.js";
+export type { CommitCellEditResult } from "./row/commit-cell-edit.js";
+export { findNextEditableCell } from "./row/find-next-editable-cell.js";
+export { getCellValue, formatCellValue } from "./row/get-cell-value.js";
+
+/** Primary entry point — alias for createGridEngine. */
+export function createGrid<TData>(options: Parameters<typeof createGridEngine<TData>>[0] = {}) {
+  return createGridEngine(options);
+}
