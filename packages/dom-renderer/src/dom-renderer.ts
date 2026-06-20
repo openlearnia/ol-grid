@@ -18,6 +18,36 @@ import {
 } from "./cell-editors.js";
 
 const THEME_STYLE_ID = "ol-grid-dom-theme";
+const KEYBOARD_LOG_PREFIX = "[ol-grid:keyboard]";
+
+function logKeyboard(event: string, data?: Record<string, unknown>): void {
+  if (data) {
+    console.log(KEYBOARD_LOG_PREFIX, event, data);
+  } else {
+    console.log(KEYBOARD_LOG_PREFIX, event);
+  }
+}
+
+function describeElement(el: Element | null | undefined): string {
+  if (!el || !(el instanceof Element)) return "none";
+  const tag = el.tagName.toLowerCase();
+  const cls =
+    typeof el.className === "string" && el.className
+      ? `.${el.className.trim().split(/\s+/).slice(0, 3).join(".")}`
+      : "";
+  const role = el.getAttribute("role");
+  const ds = (el as HTMLElement).dataset?.colId
+    ? ` col=${(el as HTMLElement).dataset.colId}`
+    : (el as HTMLElement).dataset?.focusSentinel
+      ? ` sentinel=${(el as HTMLElement).dataset.focusSentinel}`
+      : "";
+  return `${tag}${cls}${role ? ` role=${role}` : ""}${ds}`;
+}
+
+function describeCell(focused: CellPosition | null | undefined): string {
+  if (!focused) return "null";
+  return `{row:${focused.rowIndex}, colId:${focused.colId}}`;
+}
 
 function getCellValueFromEngine(
   engine: GridEngine,
@@ -38,20 +68,33 @@ function ensureThemeStyles(): void {
   document.head.appendChild(style);
 }
 
+function createFocusSentinel(position: "before" | "after"): HTMLElement {
+  const sentinel = document.createElement("div");
+  sentinel.className = "ol-grid__focus-sentinel";
+  sentinel.dataset.focusSentinel = position;
+  sentinel.setAttribute("aria-hidden", "true");
+  sentinel.tabIndex = -1;
+  return sentinel;
+}
+
 export class DomRenderer implements RendererAdapter {
   readonly type = "dom" as const;
 
   private host: HTMLElement | null = null;
+  private sentinelBefore: HTMLElement | null = null;
+  private sentinelAfter: HTMLElement | null = null;
   private root: HTMLElement | null = null;
   private header: HTMLElement | null = null;
   private headerPinnedLeft: HTMLElement | null = null;
   private headerCenter: HTMLElement | null = null;
   private headerPinnedRight: HTMLElement | null = null;
+  private headerSpacer: HTMLElement | null = null;
   private headerCenterRow: HTMLElement | null = null;
   private body: HTMLElement | null = null;
   private bodyInner: HTMLElement | null = null;
   private bodyPinnedLeft: HTMLElement | null = null;
   private bodyPinnedRight: HTMLElement | null = null;
+  private bodySpacer: HTMLElement | null = null;
   private centerScroll: HTMLElement | null = null;
   private centerInner: HTMLElement | null = null;
   private rowsPinned: HTMLElement | null = null;
@@ -60,10 +103,10 @@ export class DomRenderer implements RendererAdapter {
   private engine: GridEngine | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private frame: RenderFrame | null = null;
-  private scrollRaf: number | null = null;
   private activeEditor: HTMLElement | null = null;
   private activeEditorType: ProvidedCellEditorType | null = null;
   private suppressEditorBlur = false;
+  private keyboardNavFocusPending = false;
   private resizeState: {
     colId: string;
     startX: number;
@@ -74,6 +117,16 @@ export class DomRenderer implements RendererAdapter {
     ensureThemeStyles();
     this.host = host;
     this.engine = engine;
+
+    // Drop leftover grid chrome from a prior mount (e.g. StrictMode remount).
+    for (const child of [...host.children]) {
+      if (
+        child.classList.contains("ol-grid__root") ||
+        child.classList.contains("ol-grid__focus-sentinel")
+      ) {
+        child.remove();
+      }
+    }
 
     host.classList.add("ol-grid");
     host.setAttribute("role", "grid");
@@ -103,9 +156,14 @@ export class DomRenderer implements RendererAdapter {
     headerPinnedRight.className = "ol-grid__header-pinned-right";
     headerPinnedRight.setAttribute("role", "row");
 
+    const headerSpacer = document.createElement("div");
+    headerSpacer.className = "ol-grid__layout-spacer";
+    headerSpacer.setAttribute("aria-hidden", "true");
+
     header.appendChild(headerPinnedLeft);
     header.appendChild(headerCenter);
     header.appendChild(headerPinnedRight);
+    header.appendChild(headerSpacer);
 
     const body = document.createElement("div");
     body.className = "ol-grid__body";
@@ -132,6 +190,10 @@ export class DomRenderer implements RendererAdapter {
     const bodyPinnedRight = document.createElement("div");
     bodyPinnedRight.className = "ol-grid__body-pinned-right";
 
+    const bodySpacer = document.createElement("div");
+    bodySpacer.className = "ol-grid__layout-spacer";
+    bodySpacer.setAttribute("aria-hidden", "true");
+
     const rowsPinnedRight = document.createElement("div");
     rowsPinnedRight.className = "ol-grid__rows ol-grid__rows--pinned-right";
 
@@ -142,22 +204,32 @@ export class DomRenderer implements RendererAdapter {
     bodyInner.appendChild(bodyPinnedLeft);
     bodyInner.appendChild(centerScroll);
     bodyInner.appendChild(bodyPinnedRight);
+    bodyInner.appendChild(bodySpacer);
     body.appendChild(bodyInner);
 
     root.appendChild(header);
     root.appendChild(body);
+
+    const sentinelBefore = createFocusSentinel("before");
+    const sentinelAfter = createFocusSentinel("after");
+    host.appendChild(sentinelBefore);
     host.appendChild(root);
+    host.appendChild(sentinelAfter);
 
     this.root = root;
+    this.sentinelBefore = sentinelBefore;
+    this.sentinelAfter = sentinelAfter;
     this.header = header;
     this.headerPinnedLeft = headerPinnedLeft;
     this.headerCenter = headerCenter;
     this.headerPinnedRight = headerPinnedRight;
+    this.headerSpacer = headerSpacer;
     this.headerCenterRow = headerCenterRow;
     this.body = body;
     this.bodyInner = bodyInner;
     this.bodyPinnedLeft = bodyPinnedLeft;
     this.bodyPinnedRight = bodyPinnedRight;
+    this.bodySpacer = bodySpacer;
     this.centerScroll = centerScroll;
     this.centerInner = centerInner;
     this.rowsPinned = rowsPinned;
@@ -171,8 +243,10 @@ export class DomRenderer implements RendererAdapter {
     header.addEventListener("dblclick", this.handleHeaderDblClick);
     bodyInner.addEventListener("click", this.handleRowClick);
     bodyInner.addEventListener("dblclick", this.handleCellDblClick);
-    host.addEventListener("keydown", this.handleKeyDown, true);
-    host.addEventListener("focus", this.handleHostFocus);
+      host.addEventListener("focus", this.handleHostFocus);
+    sentinelBefore.addEventListener("focus", this.handleSentinelBeforeFocus);
+    sentinelAfter.addEventListener("focus", this.handleSentinelAfterFocus);
+    document.addEventListener("keydown", this.handleKeyDown, true);
     document.addEventListener("mousedown", this.handleDocumentMouseDown);
 
     this.resizeObserver = new ResizeObserver(() => this.reportViewportSize());
@@ -191,26 +265,30 @@ export class DomRenderer implements RendererAdapter {
     this.header?.removeEventListener("dblclick", this.handleHeaderDblClick);
     this.bodyInner?.removeEventListener("click", this.handleRowClick);
     this.bodyInner?.removeEventListener("dblclick", this.handleCellDblClick);
-    this.host?.removeEventListener("keydown", this.handleKeyDown, true);
     this.host?.removeEventListener("focus", this.handleHostFocus);
+    this.sentinelBefore?.removeEventListener("focus", this.handleSentinelBeforeFocus);
+    this.sentinelAfter?.removeEventListener("focus", this.handleSentinelAfterFocus);
+    document.removeEventListener("keydown", this.handleKeyDown, true);
     document.removeEventListener("mousedown", this.handleDocumentMouseDown);
     this.resizeObserver?.disconnect();
-    if (this.scrollRaf !== null) {
-      cancelAnimationFrame(this.scrollRaf);
-      this.scrollRaf = null;
-    }
 
+    this.sentinelBefore?.remove();
+    this.sentinelAfter?.remove();
     this.root?.remove();
     this.root = null;
+    this.sentinelBefore = null;
+    this.sentinelAfter = null;
     this.header = null;
     this.headerPinnedLeft = null;
     this.headerCenter = null;
     this.headerPinnedRight = null;
+    this.headerSpacer = null;
     this.headerCenterRow = null;
     this.body = null;
     this.bodyInner = null;
     this.bodyPinnedLeft = null;
     this.bodyPinnedRight = null;
+    this.bodySpacer = null;
     this.centerScroll = null;
     this.centerInner = null;
     this.rowsPinned = null;
@@ -220,17 +298,22 @@ export class DomRenderer implements RendererAdapter {
     this.host?.classList.remove("ol-grid");
     this.host?.removeAttribute("role");
     this.host?.removeAttribute("tabindex");
+    this.host?.style.removeProperty("width");
+    this.host?.style.removeProperty("max-width");
     this.host = null;
     this.engine = null;
   }
 
   renderFrame(frame: RenderFrame): void {
     if (
+      !this.header ||
       !this.headerPinnedLeft ||
       !this.headerPinnedRight ||
+      !this.headerCenter ||
       !this.headerCenterRow ||
       !this.bodyPinnedLeft ||
       !this.bodyPinnedRight ||
+      !this.centerScroll ||
       !this.centerInner ||
       !this.rowsPinned ||
       !this.rowsCenter ||
@@ -246,15 +329,26 @@ export class DomRenderer implements RendererAdapter {
     this.host?.style.setProperty("--ol-grid-row-height", `${frame.rowHeight}px`);
     this.host?.style.setProperty("--ol-grid-pinned-left-width", `${frame.pinnedLeftWidth}px`);
     this.host?.style.setProperty("--ol-grid-pinned-right-width", `${frame.pinnedRightWidth}px`);
+    this.host!.style.width = `${frame.renderWidth}px`;
+    this.host!.style.maxWidth = "100%";
 
+    const centerOverflows = frame.centerWidth > frame.centerViewportWidth;
+    const centerScrollWidth = centerOverflows
+      ? frame.centerViewportWidth
+      : frame.centerWidth;
+
+    this.header!.style.width = `${frame.renderWidth}px`;
+    this.bodyInner.style.width = `${frame.renderWidth}px`;
     this.bodyInner.style.height = `${frame.totalHeight}px`;
     this.bodyPinnedLeft.style.width = `${frame.pinnedLeftWidth}px`;
     this.bodyPinnedRight.style.width = `${frame.pinnedRightWidth}px`;
+    this.centerScroll.style.width = `${centerScrollWidth}px`;
     this.centerInner.style.width = `${frame.centerWidth}px`;
     this.centerInner.style.height = `${frame.totalHeight}px`;
 
     this.headerPinnedLeft.style.width = `${frame.pinnedLeftWidth}px`;
     this.headerPinnedRight.style.width = `${frame.pinnedRightWidth}px`;
+    this.headerCenter.style.width = `${centerScrollWidth}px`;
     this.headerCenterRow.style.width = `${frame.centerWidth}px`;
     this.syncHeaderScroll();
     this.syncBodyScroll();
@@ -266,6 +360,7 @@ export class DomRenderer implements RendererAdapter {
     this.renderRows(frame);
     this.syncEditor(frame);
     this.syncFocusRing(frame);
+    this.syncHostTabIndex(frame);
     this.suppressEditorBlur = false;
   }
 
@@ -338,27 +433,26 @@ export class DomRenderer implements RendererAdapter {
   }
 
   private readonly handleScroll = (): void => {
-    this.dispatchScrollState();
+    this.flushScrollFromDom();
   };
 
   private readonly handleCenterScroll = (): void => {
-    this.dispatchScrollState();
+    this.flushScrollFromDom();
   };
 
-  private dispatchScrollState(): void {
-    if (!this.body || !this.engine) return;
-    if (this.scrollRaf !== null) return;
+  /** Read live body scroll into store before the next paint. */
+  syncScrollFromViewport(): void {
+    this.flushScrollFromDom();
+  }
 
-    this.scrollRaf = requestAnimationFrame(() => {
-      this.scrollRaf = null;
-      if (!this.body || !this.engine) return;
-      const scrollTop = this.body.scrollTop;
-      const scrollLeft = this.centerScroll?.scrollLeft ?? 0;
-      this.syncHeaderScroll();
-      const state = this.engine.getStore().getState();
-      if (state.scrollTop === scrollTop && state.scrollLeft === scrollLeft) return;
-      this.engine.getStore().dispatch({ type: "SET_SCROLL", scrollTop, scrollLeft });
-    });
+  private flushScrollFromDom(): void {
+    if (!this.body || !this.engine) return;
+    const scrollTop = this.body.scrollTop;
+    const scrollLeft = this.centerScroll?.scrollLeft ?? 0;
+    this.syncHeaderScroll();
+    const state = this.engine.getStore().getState();
+    if (state.scrollTop === scrollTop && state.scrollLeft === scrollLeft) return;
+    this.engine.getStore().dispatch({ type: "SET_SCROLL", scrollTop, scrollLeft });
   }
 
   private syncHeaderScroll(): void {
@@ -450,11 +544,18 @@ export class DomRenderer implements RendererAdapter {
     if (!target || !this.engine) return;
 
     const colId = target.dataset.colId;
-    const sortable = target.dataset.sortable === "true";
-    if (!colId || !sortable) return;
+    if (!colId) return;
 
     event.stopPropagation();
-    this.engine.toggleColumnSort(colId);
+    this.engine.setFocusedHeader(colId);
+
+    const sortable = target.dataset.sortable === "true";
+    if (sortable) {
+      this.engine.toggleColumnSort(colId);
+    }
+
+    // Re-render from setFocusedHeader/sort replaces header nodes; syncFocusRing restores focus.
+    this.focusHeader(colId);
   };
 
   private readonly handleRowClick = (event: Event): void => {
@@ -514,13 +615,23 @@ export class DomRenderer implements RendererAdapter {
 
   private readonly handleDocumentMouseDown = (event: MouseEvent): void => {
     if (!this.engine || !this.host) return;
-    if (!this.engine.getStore().getState().editing) return;
 
     const target = event.target as Node | null;
     if (target && this.host.contains(target)) return;
 
-    const cancel = !this.engine.shouldStopEditingWhenCellsLoseFocus();
-    this.engine.stopEditing(cancel);
+    const state = this.engine.getStore().getState();
+    if (state.editing) {
+      const cancel = !this.engine.shouldStopEditingWhenCellsLoseFocus();
+      this.engine.stopEditing(cancel);
+    }
+
+    if (state.focusedCell) {
+      this.engine.clearFocusedCell();
+    }
+
+    if (state.focusedHeaderColId) {
+      this.engine.setFocusedHeader(null);
+    }
   };
 
   private readonly handleEditorBlur = (): void => {
@@ -530,108 +641,466 @@ export class DomRenderer implements RendererAdapter {
   };
 
   private readonly handleEditorTab = (shiftKey: boolean): void => {
+    const focused = this.engine?.getFocusedCell();
+    logKeyboard("tab (editor)", {
+      shiftKey,
+      focusedCell: describeCell(focused),
+      ...this.keyboardLogContext(),
+    });
     this.engine?.stopEditingAndMoveToNextEditable(!shiftKey);
   };
 
   private readonly handleHostFocus = (): void => {
     if (!this.engine) return;
     const state = this.engine.getStore().getState();
-    if (state.focusedCell) return;
+    if (state.focusedCell) {
+      this.focusCurrentStoreCell();
+      return;
+    }
+
+    if (state.focusedHeaderColId) {
+      this.focusHeader(state.focusedHeaderColId);
+      return;
+    }
 
     const columns = this.engine.getNavigableColumns();
     if (columns.length === 0) return;
     this.engine.setFocusedCell(0, columns[0]!.colId);
+    this.focusCurrentStoreCell();
   };
 
-  private readonly handleKeyDown = (event: KeyboardEvent): void => {
+  private readonly handleSentinelBeforeFocus = (): void => {
+    this.redirectSentinelFocus("first");
+  };
+
+  private readonly handleSentinelAfterFocus = (): void => {
+    this.redirectSentinelFocus("last");
+  };
+
+  private redirectSentinelFocus(edge: "first" | "last"): void {
     if (!this.engine) return;
 
-    const state = this.engine.getStore().getState();
-    const isEditing = !!state.editing;
+    const columns = this.engine.getNavigableColumns();
+    if (columns.length === 0) {
+      this.host?.focus({ preventScroll: true });
+      return;
+    }
+
+    if (edge === "first") {
+      this.engine.setFocusedHeader(columns[0]!.colId);
+      this.keyboardNavFocusPending = true;
+      this.scheduleFocusAfterKeyboardNav();
+    } else {
+      const rowCount = this.engine.getRowModel().getRowCount();
+      if (rowCount === 0) {
+        this.host?.focus({ preventScroll: true });
+        return;
+      }
+      this.engine.setFocusedCell(rowCount - 1, columns[columns.length - 1]!.colId);
+      this.keyboardNavFocusPending = true;
+      this.scheduleFocusAfterKeyboardNav();
+    }
+  }
+
+  private isKeyboardEventForThisGrid(event: KeyboardEvent): boolean {
+    if (!this.host) return false;
+    const active = document.activeElement;
+    if (active) {
+      if (
+        active === this.host ||
+        active === this.sentinelBefore ||
+        active === this.sentinelAfter ||
+        this.host.contains(active)
+      ) {
+        return true;
+      }
+    }
+    const target = event.target as Node | null;
+    return !!(target && this.host.contains(target));
+  }
+
+  private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (!this.engine || !this.host) return;
+    if (!this.isKeyboardEventForThisGrid(event)) {
+      logKeyboard("keydown skipped", {
+        reason: "outside grid",
+        key: event.key,
+        target: describeElement(event.target as Element),
+        ...this.keyboardLogContext(),
+      });
+      return;
+    }
+
+    const isEditing = !!this.engine.getStore().getState().editing;
+    const key = event.key;
+    const target = describeElement(event.target as Element);
 
     if (isEditing) {
       if (event.key === "Escape") {
+        logKeyboard("keydown handled", {
+          key, target, handled: true, isEditing,
+          action: "stopEditing(cancel)",
+          ...this.keyboardLogContext(),
+        });
         event.preventDefault();
+        event.stopPropagation();
         this.engine.stopEditing(true);
+        this.focusCurrentStoreCell();
         return;
       }
       if (event.key === "Enter") {
+        logKeyboard("keydown handled", {
+          key, target, handled: true, isEditing,
+          action: "stopEditing(commit)",
+          ...this.keyboardLogContext(),
+        });
         event.preventDefault();
+        event.stopPropagation();
+        this.suppressEditorBlur = true;
         this.engine.stopEditing(false);
+        this.focusCurrentStoreCell();
         return;
       }
       if (event.key === "Tab") {
+        logKeyboard("keydown handled", {
+          key, target, handled: true, isEditing,
+          action: "tab next editable",
+          shiftKey: event.shiftKey,
+          focusedCell: describeCell(this.engine.getFocusedCell()),
+          ...this.keyboardLogContext(),
+        });
         event.preventDefault();
+        event.stopPropagation();
+        this.suppressEditorBlur = true;
         this.engine.stopEditingAndMoveToNextEditable(!event.shiftKey);
+        if (!this.engine.getStore().getState().editing) {
+          this.keyboardNavFocusPending = true;
+          this.scheduleFocusAfterKeyboardNav();
+        }
         return;
       }
       return;
     }
 
-    switch (event.key) {
-      case "ArrowUp":
-        event.preventDefault();
-        this.engine.moveFocusedCell(-1, 0);
-        break;
-      case "ArrowDown":
-        event.preventDefault();
-        this.engine.moveFocusedCell(1, 0);
-        break;
-      case "ArrowLeft":
-        event.preventDefault();
-        this.engine.moveFocusedCell(0, -1);
-        break;
-      case "ArrowRight":
-        event.preventDefault();
-        this.engine.moveFocusedCell(0, 1);
-        break;
-      case "Home":
-        event.preventDefault();
-        if (event.ctrlKey || event.metaKey) {
-          this.engine.setFocusedCell(0, this.engine.getNavigableColumns()[0]?.colId ?? "");
-        } else {
-          this.engine.moveFocusedCellToColumn("first");
-        }
-        break;
-      case "End":
-        event.preventDefault();
-        if (event.ctrlKey || event.metaKey) {
-          const columns = this.engine.getNavigableColumns();
-          const rowCount = this.engine.getRowModel().getRowCount();
-          if (columns.length > 0 && rowCount > 0) {
-            this.engine.setFocusedCell(rowCount - 1, columns[columns.length - 1]!.colId);
-          }
-        } else {
-          this.engine.moveFocusedCellToColumn("last");
-        }
-        break;
-      case "PageDown":
-        event.preventDefault();
-        this.engine.pageFocusedCell("down");
-        break;
-      case "PageUp":
-        event.preventDefault();
-        this.engine.pageFocusedCell("up");
-        break;
-      case "Enter":
-      case "F2": {
-        event.preventDefault();
-        const focused = state.focusedCell;
-        if (focused) {
-          this.engine.startEditingCell(focused.rowIndex, focused.colId);
-        }
-        break;
-      }
-      case "Escape":
-        if (state.focusedCell) {
+    const active = document.activeElement;
+    const isHostFocused = active === this.host;
+    const focusedHeaderColId = this.engine.getFocusedHeader();
+    const isHeaderFocused = focusedHeaderColId !== null;
+
+    if (isHeaderFocused) {
+      switch (event.key) {
+        case "ArrowLeft":
           event.preventDefault();
-          this.engine.getStore().dispatch({ type: "SET_FOCUSED_CELL", focusedCell: null });
+          event.stopPropagation();
+          this.engine.moveHeaderFocus(-1);
+          this.focusHeader(this.engine.getFocusedHeader()!);
+          return;
+        case "ArrowRight":
+          event.preventDefault();
+          event.stopPropagation();
+          this.engine.moveHeaderFocus(1);
+          this.focusHeader(this.engine.getFocusedHeader()!);
+          return;
+        case "Enter":
+        case "Space": {
+          event.preventDefault();
+          event.stopPropagation();
+          const colId = this.engine.getFocusedHeader();
+          if (colId) this.engine.toggleColumnSort(colId);
+          return;
         }
-        break;
-      default:
-        break;
+        case "Escape":
+          event.preventDefault();
+          event.stopPropagation();
+          this.engine.setFocusedHeader(null);
+          this.host?.focus({ preventScroll: true });
+          return;
+        case "Tab": {
+          const headerCols = this.engine.getNavigableColumns();
+          const currentHeaderIdx = headerCols.findIndex(
+            (c) => c.colId === focusedHeaderColId,
+          );
+          if (event.shiftKey) {
+            if (currentHeaderIdx > 0) {
+              event.preventDefault();
+              event.stopPropagation();
+              this.engine.moveHeaderFocus(-1);
+              this.focusHeader(this.engine.getFocusedHeader()!);
+            } else {
+              // first header → exit grid to previous focusable outside
+              event.preventDefault();
+              event.stopPropagation();
+              this.exitGridTab("before");
+            }
+          } else {
+            event.preventDefault();
+            event.stopPropagation();
+            if (currentHeaderIdx < headerCols.length - 1) {
+              this.engine.moveHeaderFocus(1);
+              this.focusHeader(this.engine.getFocusedHeader()!);
+            } else {
+              // last header → move to first body cell
+              const rowCount = this.engine.getRowModel().getRowCount();
+              this.engine.setFocusedHeader(null);
+              if (rowCount > 0) {
+                this.flushScrollFromDom();
+                this.keyboardNavFocusPending = true;
+                this.engine.tabNavigate(true);
+                this.scheduleFocusAfterKeyboardNav();
+              }
+            }
+          }
+          return;
+        }
+        default:
+          break;
+      }
+    }
+
+    if (!isEditing) {
+      switch (event.key) {
+        case "ArrowUp":
+          logKeyboard("keydown handled", { key, target, handled: true, isEditing, action: "nav up" });
+          event.preventDefault();
+          event.stopPropagation();
+          this.runKeyboardNavigation("up", () => this.engine!.moveFocusedCell(-1, 0));
+          break;
+        case "ArrowDown":
+          logKeyboard("keydown handled", { key, target, handled: true, isEditing, action: "nav down" });
+          event.preventDefault();
+          event.stopPropagation();
+          this.runKeyboardNavigation("down", () => this.engine!.moveFocusedCell(1, 0));
+          break;
+        case "ArrowLeft":
+          logKeyboard("keydown handled", { key, target, handled: true, isEditing, action: "nav left" });
+          event.preventDefault();
+          event.stopPropagation();
+          this.runKeyboardNavigation("left", () => this.engine!.moveFocusedCell(0, -1));
+          break;
+        case "ArrowRight":
+          logKeyboard("keydown handled", { key, target, handled: true, isEditing, action: "nav right" });
+          event.preventDefault();
+          event.stopPropagation();
+          this.runKeyboardNavigation("right", () => this.engine!.moveFocusedCell(0, 1));
+          break;
+        case "Home":
+          logKeyboard("keydown handled", {
+            key, target, handled: true, isEditing,
+            action: event.ctrlKey || event.metaKey ? "nav home row" : "nav first col",
+          });
+          event.preventDefault();
+          event.stopPropagation();
+          this.runKeyboardNavigation(
+            event.ctrlKey || event.metaKey ? "home-row" : "home-col",
+            () => {
+              if (event.ctrlKey || event.metaKey) {
+                this.engine!.setFocusedCell(0, this.engine!.getNavigableColumns()[0]?.colId ?? "");
+              } else {
+                this.engine!.moveFocusedCellToColumn("first");
+              }
+            },
+          );
+          break;
+        case "End":
+          logKeyboard("keydown handled", {
+            key, target, handled: true, isEditing,
+            action: event.ctrlKey || event.metaKey ? "nav end row" : "nav last col",
+          });
+          event.preventDefault();
+          event.stopPropagation();
+          this.runKeyboardNavigation(
+            event.ctrlKey || event.metaKey ? "end-row" : "end-col",
+            () => {
+              if (event.ctrlKey || event.metaKey) {
+                const columns = this.engine!.getNavigableColumns();
+                const rowCount = this.engine!.getRowModel().getRowCount();
+                if (columns.length > 0 && rowCount > 0) {
+                  this.engine!.setFocusedCell(rowCount - 1, columns[columns.length - 1]!.colId);
+                }
+              } else {
+                this.engine!.moveFocusedCellToColumn("last");
+              }
+            },
+          );
+          break;
+        case "PageDown":
+          logKeyboard("keydown handled", { key, target, handled: true, isEditing, action: "page down" });
+          event.preventDefault();
+          event.stopPropagation();
+          this.runKeyboardNavigation("pageDown", () => this.engine!.pageFocusedCell("down"));
+          break;
+        case "PageUp":
+          logKeyboard("keydown handled", { key, target, handled: true, isEditing, action: "page up" });
+          event.preventDefault();
+          event.stopPropagation();
+          this.runKeyboardNavigation("pageUp", () => this.engine!.pageFocusedCell("up"));
+          break;
+        case "Tab": {
+          const focusedCell = this.engine!.getFocusedCell();
+          if (event.shiftKey) {
+            if (focusedCell) {
+              const columns = this.engine!.getNavigableColumns();
+              const colIndex = columns.findIndex((c) => c.colId === focusedCell.colId);
+              const isFirstCell = colIndex === 0 && focusedCell.rowIndex === 0;
+              if (isFirstCell) {
+                const headerCols = this.engine!.getNavigableColumns();
+                if (headerCols.length > 0) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const lastHeaderCol = headerCols[headerCols.length - 1]!.colId;
+                  this.engine!.setFocusedHeader(lastHeaderCol);
+                  this.keyboardNavFocusPending = true;
+                  this.scheduleFocusAfterKeyboardNav();
+                }
+              } else {
+                event.preventDefault();
+                event.stopPropagation();
+                this.flushScrollFromDom();
+                this.keyboardNavFocusPending = true;
+                this.engine!.tabNavigate(false);
+                this.scheduleFocusAfterKeyboardNav();
+              }
+            } else if (isHostFocused) {
+              event.preventDefault();
+              event.stopPropagation();
+              this.exitGridTab("before");
+            }
+          } else {
+            if (isHostFocused && !focusedCell) {
+              event.preventDefault();
+              event.stopPropagation();
+              this.flushScrollFromDom();
+              this.keyboardNavFocusPending = true;
+              this.engine!.tabNavigate(true);
+              this.scheduleFocusAfterKeyboardNav();
+            } else if (focusedCell) {
+              const columns = this.engine!.getNavigableColumns();
+              const colIndex = columns.findIndex((c) => c.colId === focusedCell.colId);
+              const rowCount = this.engine!.getRowModel().getRowCount();
+              const isLastCell =
+                colIndex === columns.length - 1 && focusedCell.rowIndex === rowCount - 1;
+              if (isLastCell) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.exitGridTab("after");
+              } else {
+                event.preventDefault();
+                event.stopPropagation();
+                this.flushScrollFromDom();
+                this.keyboardNavFocusPending = true;
+                this.engine!.tabNavigate(true);
+                this.scheduleFocusAfterKeyboardNav();
+              }
+            }
+          }
+          break;
+        }
+        case "Enter":
+        case "F2": {
+          logKeyboard("keydown handled", {
+            key, target, handled: true, isEditing,
+            action: "start edit",
+            focusedCell: describeCell(this.engine.getFocusedCell()),
+            ...this.keyboardLogContext(),
+          });
+          event.preventDefault();
+          event.stopPropagation();
+          this.flushScrollFromDom();
+          const focused = this.ensureFocusedCellForKeyboard();
+          if (focused) {
+            this.engine.startEditingCell(focused.rowIndex, focused.colId);
+          }
+          break;
+        }
+        case "Escape": {
+          const focusedCell = this.engine.getFocusedCell();
+          if (focusedCell) {
+            logKeyboard("keydown handled", {
+              key, target, handled: true, isEditing,
+              action: "clear focus",
+              focusedCell: describeCell(focusedCell),
+              ...this.keyboardLogContext(),
+            });
+            event.preventDefault();
+            event.stopPropagation();
+            this.engine.clearFocusedCell();
+          }
+          break;
+        }
+        default:
+          break;
+      }
     }
   };
+
+  private runKeyboardNavigation(direction: string, action: () => void): void {
+    this.flushScrollFromDom();
+    const before = this.engine?.getFocusedCell() ?? null;
+    const active = document.activeElement;
+    if (
+      active === this.host ||
+      active === this.sentinelBefore ||
+      active === this.sentinelAfter
+    ) {
+      this.ensureFocusedCellForKeyboard();
+    }
+    logKeyboard("navigate", {
+      direction,
+      before: describeCell(before ?? this.engine?.getFocusedCell()),
+      ...this.keyboardLogContext(),
+    });
+    this.keyboardNavFocusPending = true;
+    action();
+    const after = this.engine?.getFocusedCell() ?? null;
+    logKeyboard("navigate result", {
+      direction,
+      after: describeCell(after),
+      ...this.keyboardLogContext(),
+    });
+    this.scheduleFocusAfterKeyboardNav();
+  }
+
+  private scheduleFocusAfterKeyboardNav(): void {
+    queueMicrotask(() => {
+      if (!this.keyboardNavFocusPending) return;
+      this.keyboardNavFocusPending = false;
+      const focusedHeaderColId = this.engine?.getFocusedHeader();
+      if (focusedHeaderColId) {
+        this.focusHeader(focusedHeaderColId);
+        return;
+      }
+      this.focusCurrentStoreCell();
+    });
+  }
+
+  private ensureFocusedCellForKeyboard(): CellPosition | null {
+    let focused = this.engine?.getFocusedCell() ?? null;
+    if (focused || !this.engine) return focused;
+
+    const columns = this.engine.getNavigableColumns();
+    if (columns.length === 0) return null;
+
+    this.engine.setFocusedCell(0, columns[0]!.colId);
+    return this.engine.getFocusedCell();
+  }
+
+  private focusCurrentStoreCell(): void {
+    const focused = this.engine?.getFocusedCell();
+    if (focused) {
+      logKeyboard("focus store cell", {
+        focusedCell: describeCell(focused),
+        ...this.keyboardLogContext(),
+      });
+      this.focusFocusedCell(focused.rowIndex, focused.colId);
+    }
+  }
+
+  private keyboardLogContext(): { scrollTop: number; active: string } {
+    return {
+      scrollTop: this.body?.scrollTop ?? 0,
+      active: describeElement(document.activeElement),
+    };
+  }
 
   private reportViewportSize(): void {
     if (!this.body || !this.engine) return;
@@ -650,6 +1119,7 @@ export class DomRenderer implements RendererAdapter {
     columns: RenderColumn[],
     frame: RenderFrame,
   ): void {
+    const focusedHeaderColId = frame.focusedHeaderColId;
     const existing = new Map(
       [...container.children].map((child) => [
         (child as HTMLElement).dataset.colId,
@@ -674,6 +1144,10 @@ export class DomRenderer implements RendererAdapter {
       cell.classList.toggle("ol-grid__header-cell--selection", !!column.isSelectionColumn);
       cell.classList.toggle("ol-grid__header-cell--pinned-left", column.pinned === "left");
       cell.classList.toggle("ol-grid__header-cell--pinned-right", column.pinned === "right");
+
+      const isFocused = focusedHeaderColId === column.colId;
+      cell.classList.toggle("ol-grid__header-cell--focused", isFocused);
+      cell.tabIndex = isFocused ? 0 : -1;
 
       if (column.isSelectionColumn) {
         cell.removeAttribute("aria-sort");
@@ -974,23 +1448,172 @@ export class DomRenderer implements RendererAdapter {
     this.activeEditorType = null;
   }
 
+  private syncHostTabIndex(frame: RenderFrame): void {
+    if (!this.host) return;
+    this.host.tabIndex = frame.focusedCell || frame.focusedHeaderColId ? -1 : 0;
+  }
+
+  private isFocusableElement(el: HTMLElement): boolean {
+    if (el.getAttribute("aria-hidden") === "true") return false;
+    if ("disabled" in el && (el as HTMLInputElement).disabled) return false;
+
+    if (el.tabIndex < 0) {
+      const tag = el.tagName;
+      if (tag === "A" && el.hasAttribute("href")) return true;
+      return tag === "BUTTON" || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
+    }
+    return true;
+  }
+
+  private getTabOrderedFocusables(): HTMLElement[] {
+    const candidates = document.querySelectorAll<HTMLElement>(
+      'a[href], button, input, select, textarea, [tabindex]',
+    );
+    return [...candidates].filter((el) => this.isFocusableElement(el));
+  }
+
+  private findOutsideFocusTarget(direction: "before" | "after"): HTMLElement | null {
+    if (!this.host) return null;
+
+    const ordered = this.getTabOrderedFocusables();
+    const active = document.activeElement as HTMLElement | null;
+
+    if (active && ordered.includes(active)) {
+      const activeIndex = ordered.indexOf(active);
+      if (direction === "before") {
+        for (let i = activeIndex - 1; i >= 0; i--) {
+          if (!this.host.contains(ordered[i]!)) return ordered[i]!;
+        }
+      } else {
+        for (let i = activeIndex + 1; i < ordered.length; i++) {
+          if (!this.host.contains(ordered[i]!)) return ordered[i]!;
+        }
+      }
+      return null;
+    }
+
+    const gridIndices = ordered
+      .map((el, index) => (this.host!.contains(el) ? index : -1))
+      .filter((index) => index >= 0);
+    if (gridIndices.length === 0) return null;
+
+    const boundaryIndex =
+      direction === "before" ? gridIndices[0]! : gridIndices[gridIndices.length - 1]!;
+    if (direction === "before") {
+      for (let i = boundaryIndex - 1; i >= 0; i--) {
+        if (!this.host.contains(ordered[i]!)) return ordered[i]!;
+      }
+    } else {
+      for (let i = boundaryIndex + 1; i < ordered.length; i++) {
+        if (!this.host.contains(ordered[i]!)) return ordered[i]!;
+      }
+    }
+    return null;
+  }
+
+  private focusOutsideGrid(direction: "before" | "after"): void {
+    const target = this.findOutsideFocusTarget(direction);
+    if (target) {
+      target.focus({ preventScroll: true });
+      return;
+    }
+
+    if (!this.host) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && this.host.contains(active)) {
+      active.blur();
+    }
+  }
+
+  private exitGridTab(direction: "before" | "after"): void {
+    if (!this.host || !this.engine) return;
+    const target = this.findOutsideFocusTarget(direction);
+    this.engine.setFocusedHeader(null);
+    this.engine.clearFocusedCell();
+    this.host.tabIndex = -1;
+    if (target) {
+      target.focus({ preventScroll: true });
+      return;
+    }
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && this.host.contains(active)) {
+      active.blur();
+    }
+  }
+
   private syncFocusRing(frame: RenderFrame): void {
     if (frame.editing) return;
-    const focused = frame.focusedCell;
-    if (!focused) return;
 
     const active = document.activeElement;
     const focusInsideGrid =
-      active === this.host || (this.host != null && this.host.contains(active));
+      active === this.host ||
+      active === this.sentinelBefore ||
+      active === this.sentinelAfter ||
+      active === this.body ||
+      active === this.bodyInner ||
+      (this.host != null && this.host.contains(active));
 
-    if (focusInsideGrid) {
+    if (frame.focusedHeaderColId) {
+      // Always restore header DOM focus when a header is focused in store.
+      // Re-renders (e.g. after sort on header click) replace header nodes and drop focus;
+      // without this, Tab keydown is not routed to the grid handler.
+      this.focusHeader(frame.focusedHeaderColId);
+      return;
+    }
+
+    const focused = frame.focusedCell;
+    if (!focused) return;
+
+    if (focusInsideGrid || this.keyboardNavFocusPending) {
       this.focusFocusedCell(focused.rowIndex, focused.colId);
     }
   }
 
   private focusFocusedCell(rowIndex: number, colId: string): void {
-    if (!this.frame) return;
+    if (!this.frame) {
+      logKeyboard("focus cell skipped", { rowIndex, colId, reason: "no frame" });
+      return;
+    }
     const cellEl = this.findRowCell(rowIndex, colId, this.frame);
+    if (cellEl) {
+      const alreadyFocused = document.activeElement === cellEl;
+      if (!alreadyFocused) {
+        cellEl.focus({ preventScroll: true });
+      }
+      logKeyboard("focus cell", {
+        rowIndex,
+        colId,
+        domFound: true,
+        alreadyFocused,
+        focusResult: describeElement(document.activeElement),
+        ...this.keyboardLogContext(),
+      });
+      return;
+    }
+
+    const active = document.activeElement;
+    if (
+      active === this.host ||
+      active === this.sentinelBefore ||
+      active === this.sentinelAfter ||
+      (active !== null && !this.host?.contains(active))
+    ) {
+      this.host?.focus({ preventScroll: true });
+    }
+    logKeyboard("focus cell", {
+      rowIndex,
+      colId,
+      domFound: false,
+      fallback: describeElement(document.activeElement),
+      ...this.keyboardLogContext(),
+    });
+  }
+
+  private focusHeader(colId: string): void {
+    if (!this.frame) return;
+    const cellEl = this.header?.querySelector<HTMLElement>(
+      `[data-col-id="${colId}"][role="columnheader"]`,
+    );
     if (cellEl && document.activeElement !== cellEl) {
       cellEl.focus({ preventScroll: true });
     }
@@ -1002,6 +1625,7 @@ export class DomRenderer implements RendererAdapter {
     input.className = "ol-grid__selection-checkbox";
     input.dataset.selectionCheckbox = "true";
     input.checked = checked;
+    input.tabIndex = -1;
     input.setAttribute("aria-label", "Select row");
     return input;
   }
@@ -1013,6 +1637,7 @@ export class DomRenderer implements RendererAdapter {
     input.dataset.headerSelectAll = "true";
     input.checked = state === "checked";
     input.indeterminate = state === "indeterminate";
+    input.tabIndex = -1;
     input.setAttribute("aria-label", "Select all rows");
     return input;
   }

@@ -32,9 +32,61 @@
       .demo-grid {
         flex: 1;
         min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .demo-grid > .ol-grid-host {
+        flex: 1;
+        min-height: 0;
         border: 1px solid #e2e8f0;
         border-radius: 8px;
         overflow: hidden;
+      }
+
+      .demo-column-config {
+        flex-shrink: 0;
+      }
+
+      .demo-column-config h2 {
+        margin: 0 0 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #334155;
+      }
+
+      .demo-column-config-scroll {
+        overflow-x: auto;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+      }
+
+      .demo-column-config table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.75rem;
+      }
+
+      .demo-column-config th,
+      .demo-column-config td {
+        padding: 6px 10px;
+        text-align: left;
+        border-bottom: 1px solid #e2e8f0;
+        white-space: nowrap;
+      }
+
+      .demo-column-config th {
+        background: #f8fafc;
+        color: #475569;
+        font-weight: 600;
+      }
+
+      .demo-column-config tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      .demo-column-config tbody tr:hover {
+        background: #f8fafc;
       }
     </style>
   </head>

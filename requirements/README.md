@@ -4,8 +4,8 @@
 > **Authoritative product spec:** [REQUIREMENTS.md](../REQUIREMENTS.md)  
 > **Implementation architecture:** [ARCHITECTURE.md](../ARCHITECTURE.md)
 
-**Last updated:** 2026-06-18  
-**Document count:** 31 feature specs (+ `_template.md`)
+**Last updated:** 2026-06-19  
+**Document count:** 32 feature specs (+ `_template.md`)
 
 ---
 
@@ -45,6 +45,7 @@ This folder contains **feature-level requirement documents** that expand [REQUIR
 | [core-engine.md](./core-engine.md) | `GridEngine`, `GridStore`, lifecycle, headless logic boundaries | T1–T3 | `@ol-grid/core` | Partial |
 | [grid-api-and-events.md](./grid-api-and-events.md) | `GridOptions`, `GridApi`, `ColDef`, dual callback/subscribe API, event catalog | T1–T3 | `@ol-grid/core` | Partial |
 | [plugin-module-system.md](./plugin-module-system.md) | `ModuleRegistry`, `GridModule`, `GridPlugin`, tree-shaking | T1–T3 | `@ol-grid/*` | Skeleton |
+| [debug-mode.md](./debug-mode.md) | Opt-in namespaced console logging, `DebugModule`, category filters | T1–T2 | `@ol-grid/debug` | Not started |
 | [column-model.md](./column-model.md) | Column defs, state, pin, resize, groups, value pipeline | T1–T2 | `@ol-grid/core` | Partial |
 
 ### Data
@@ -119,6 +120,7 @@ Cross-reference of **feature areas** (rows) vs **delivery tier** (columns). ✅ 
 | Core engine / GridStore | ✅ | ○ | ○ | [core-engine.md](./core-engine.md) |
 | GridOptions / GridApi / Events | ✅ | ○ | ○ | [grid-api-and-events.md](./grid-api-and-events.md) |
 | ModuleRegistry / plugins | ✅ | ○ | ○ | [plugin-module-system.md](./plugin-module-system.md) |
+| Debug mode | ✅ | ○ | | [debug-mode.md](./debug-mode.md) |
 | Column model | ✅ | ✅ | ○ | [column-model.md](./column-model.md) |
 | Client-side row model | ✅ | ○ | ○ | [client-side-row-model.md](./client-side-row-model.md) |
 | DOM renderer | ✅ | ○ | ○ | [dom-renderer.md](./dom-renderer.md) |
@@ -154,7 +156,7 @@ Cross-reference of **feature areas** (rows) vs **delivery tier** (columns). ✅ 
 | Status | Count | Meaning |
 |--------|-------|---------|
 | **Partial** | 12 | Some code exists in `packages/`; spec documents gaps |
-| **Not started** | 16 | Spec only; no or minimal implementation |
+| **Not started** | 17 | Spec only; no or minimal implementation |
 | **Draft** | 3 | Cross-cutting docs (migration, perf, plugin system) |
 
 Docs with **Current Implementation Status** sections: sorting, filtering, selection, keyboard-navigation, cell-editing, clipboard, export, framework-adapters, core-engine, column-model, client-side-row-model, dom-renderer, canvas-renderer, virtualization, theming, accessibility, internationalization, pagination, infinite-row-model, server-side-row-model.
@@ -228,29 +230,30 @@ Alphabetical list of all requirement documents (excluding `_template.md`):
 | 8 | [column-model.md](./column-model.md) |
 | 9 | [context-menu-and-tool-panels.md](./context-menu-and-tool-panels.md) |
 | 10 | [core-engine.md](./core-engine.md) |
-| 11 | [dom-renderer.md](./dom-renderer.md) |
-| 12 | [export.md](./export.md) |
-| 13 | [filtering.md](./filtering.md) |
-| 14 | [framework-adapters.md](./framework-adapters.md) |
-| 15 | [grid-api-and-events.md](./grid-api-and-events.md) |
-| 16 | [infinite-row-model.md](./infinite-row-model.md) |
-| 17 | [internationalization.md](./internationalization.md) |
-| 18 | [keyboard-navigation.md](./keyboard-navigation.md) |
-| 19 | [master-detail.md](./master-detail.md) |
-| 20 | [pagination.md](./pagination.md) |
-| 21 | [performance-and-bundle.md](./performance-and-bundle.md) |
-| 22 | [pivoting.md](./pivoting.md) |
-| 23 | [plugin-module-system.md](./plugin-module-system.md) |
-| 24 | [row-grouping.md](./row-grouping.md) |
-| 25 | [selection.md](./selection.md) |
-| 26 | [server-side-row-model.md](./server-side-row-model.md) |
-| 27 | [sorting.md](./sorting.md) |
-| 28 | [theming.md](./theming.md) |
-| 29 | [tree-data.md](./tree-data.md) |
-| 30 | [virtualization.md](./virtualization.md) |
+| 11 | [debug-mode.md](./debug-mode.md) |
+| 12 | [dom-renderer.md](./dom-renderer.md) |
+| 13 | [export.md](./export.md) |
+| 14 | [filtering.md](./filtering.md) |
+| 15 | [framework-adapters.md](./framework-adapters.md) |
+| 16 | [grid-api-and-events.md](./grid-api-and-events.md) |
+| 17 | [infinite-row-model.md](./infinite-row-model.md) |
+| 18 | [internationalization.md](./internationalization.md) |
+| 19 | [keyboard-navigation.md](./keyboard-navigation.md) |
+| 20 | [master-detail.md](./master-detail.md) |
+| 21 | [pagination.md](./pagination.md) |
+| 22 | [performance-and-bundle.md](./performance-and-bundle.md) |
+| 23 | [pivoting.md](./pivoting.md) |
+| 24 | [plugin-module-system.md](./plugin-module-system.md) |
+| 25 | [row-grouping.md](./row-grouping.md) |
+| 26 | [selection.md](./selection.md) |
+| 27 | [server-side-row-model.md](./server-side-row-model.md) |
+| 28 | [sorting.md](./sorting.md) |
+| 29 | [theming.md](./theming.md) |
+| 30 | [tree-data.md](./tree-data.md) |
+| 31 | [virtualization.md](./virtualization.md) |
 | — | [README.md](./README.md) (this index) |
 
-**Total:** 31 files (30 feature specs + README). Template: [`_template.md`](./_template.md).
+**Total:** 32 files (31 feature specs + README). Template: [`_template.md`](./_template.md).
 
 ---
 
@@ -300,3 +303,4 @@ flowchart TB
 |------|--------|
 | 2026-06-18 | Initial requirements folder: 6 feature docs + template + index |
 | 2026-06-18 | Full index refresh: 30 feature specs across 8 categories; added `export.md`, expanded `framework-adapters.md` |
+| 2026-06-19 | Added `debug-mode.md` — opt-in debug logging via `DebugModule` |

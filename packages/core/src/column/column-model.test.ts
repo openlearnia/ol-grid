@@ -105,10 +105,59 @@ describe("ColumnModel widths", () => {
 
     const pinnedRight = model.getPinnedRightColumns();
     const centerWidth = model.getCenterWidth();
+    const centerViewport = model.getCenterViewportWidth();
 
     expect(pinnedRight.map((col) => col.colId)).toEqual(["salary"]);
     expect(model.getPinnedRightWidth()).toBe(110);
-    expect(centerWidth).toBe(900 - model.getPinnedLeftWidth() - 110);
+    expect(centerViewport).toBe(900 - model.getPinnedLeftWidth() - 110);
+    expect(centerWidth).toBe(centerViewport);
     expect(model.getTotalWidth()).toBe(model.getPinnedLeftWidth() + centerWidth + 110);
+  });
+
+  it("keeps center width at column sum when fixed columns underflow viewport", () => {
+    const model = new ColumnModel<DemoRow>();
+    model.setColumnDefs([
+      { field: "id", headerName: "ID", width: 72, pinned: "left" },
+      { field: "name", headerName: "Name", width: 140, pinned: "left" },
+      { field: "role", headerName: "Role", width: 120 },
+      { field: "department", headerName: "Department", width: 130 },
+      { field: "location", headerName: "Location", width: 110 },
+      { field: "startYear", headerName: "Start", width: 90 },
+      { field: "status", headerName: "Status", width: 120 },
+      { field: "salary", headerName: "Salary", width: 110, pinned: "right" },
+    ]);
+    model.setViewportWidth(1200);
+
+    const centerWidth = model.getCenterWidth();
+    const centerViewport = model.getCenterViewportWidth();
+    const pinnedLeftWidth = model.getPinnedLeftWidth();
+    const pinnedRightWidth = model.getPinnedRightWidth();
+    const totalWidth = pinnedLeftWidth + centerWidth + pinnedRightWidth;
+
+    expect(centerWidth).toBe(120 + 130 + 110 + 90 + 120);
+    expect(centerViewport).toBe(1200 - pinnedLeftWidth - pinnedRightWidth);
+    expect(centerWidth).toBeLessThan(centerViewport);
+    expect(model.getTotalWidth()).toBe(totalWidth);
+    expect(model.getRenderWidth()).toBe(totalWidth);
+  });
+
+  it("uses viewport as render width when columns overflow", () => {
+    const model = new ColumnModel<DemoRow>();
+    model.setColumnDefs([
+      { field: "id", headerName: "ID", width: 72, pinned: "left" },
+      { field: "name", headerName: "Name", width: 140, pinned: "left" },
+      { field: "role", headerName: "Role", width: 120 },
+      { field: "department", headerName: "Department", width: 130 },
+      { field: "location", headerName: "Location", width: 110 },
+      { field: "startYear", headerName: "Start", width: 90 },
+      { field: "status", headerName: "Status", width: 120 },
+      { field: "salary", headerName: "Salary", width: 110, pinned: "right" },
+    ]);
+    model.setViewportWidth(500);
+
+    expect(model.getTotalWidth()).toBeGreaterThan(500);
+    expect(model.getRenderWidth()).toBe(500);
+    expect(model.getCenterViewportWidth()).toBe(500 - model.getPinnedLeftWidth() - model.getPinnedRightWidth());
+    expect(model.getCenterWidth()).toBeGreaterThan(model.getCenterViewportWidth());
   });
 });

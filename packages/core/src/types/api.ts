@@ -24,6 +24,7 @@ export interface GridApi<TData = unknown> {
   getSelectedRows(): TData[];
   setFocusedCell(rowIndex: number, colKey: string): void;
   getFocusedCell(): CellPosition | null;
+  clearFocusedCell(): void;
   ensureIndexVisible(rowIndex: number, position?: "top" | "middle" | "bottom"): void;
   getColumnState(): ColumnState[];
   applyColumnState(params: ApplyColumnStateParams): boolean;

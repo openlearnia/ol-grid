@@ -50,8 +50,10 @@ export interface RenderFrame {
   rowOffset: number;
   totalHeight: number;
   totalWidth: number;
+  renderWidth: number;
   pinnedLeftWidth: number;
   centerWidth: number;
+  centerViewportWidth: number;
   pinnedRightWidth: number;
   columns: RenderColumn[];
   pinnedLeftColumns: RenderColumn[];
@@ -61,6 +63,7 @@ export interface RenderFrame {
   headerCheckboxState?: HeaderCheckboxState;
   rows: RenderRow[];
   focusedCell: CellPosition | null;
+  focusedHeaderColId: string | null;
   editing: { activeCell: CellPosition; editValue: string } | null;
 }
 
@@ -69,6 +72,8 @@ export interface RendererAdapter {
   mount(host: HTMLElement, engine: GridEngine): void;
   unmount(): void;
   renderFrame(frame: RenderFrame): void;
+  /** Sync live DOM scroll into store before ensureIndexVisible (keyboard nav). */
+  syncScrollFromViewport?(): void;
   reportRowHeight(index: number, height: number): void;
   reportColumnWidth(index: number, width: number): void;
   getCellHost(position: CellPosition): HTMLElement;

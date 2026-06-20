@@ -104,6 +104,9 @@ function createGridApi<TData>(
     getFocusedCell() {
       return engine.getFocusedCell();
     },
+    clearFocusedCell() {
+      engine.clearFocusedCell();
+    },
     ensureIndexVisible(rowIndex, position) {
       engine.ensureIndexVisible(rowIndex, position);
     },
@@ -425,13 +428,33 @@ export class GridEngine<TData = unknown> {
     if (!targetCol) return;
 
     const focusedCell: CellPosition = { rowIndex: clampedRow, colId: targetCol };
-    this.store.dispatch({ type: "SET_FOCUSED_CELL", focusedCell });
+    this.store.batch(() => {
+      this.store.dispatch({ type: "SET_FOCUSED_CELL", focusedCell });
+      if (this.store.getState().focusedHeaderColId) {
+        this.store.dispatch({ type: "SET_FOCUSED_HEADER", focusedHeaderColId: null });
+      }
+    });
     this.syncSelectionFocusedCell(focusedCell);
+    this.renderer?.syncScrollFromViewport?.();
     this.ensureIndexVisible(clampedRow);
   }
 
   getFocusedCell(): CellPosition | null {
     return this.store.getState().focusedCell;
+  }
+
+  clearFocusedCell(): void {
+    if (!this.store.getState().focusedCell) return;
+
+    this.store.dispatch({ type: "SET_FOCUSED_CELL", focusedCell: null });
+
+    const selection = this.store.getState().selection;
+    if (selection?.focusedCell) {
+      this.store.dispatch({
+        type: "SET_SELECTION",
+        selection: { ...selection, focusedCell: null },
+      });
+    }
   }
 
   ensureIndexVisible(
@@ -453,7 +476,7 @@ export class GridEngine<TData = unknown> {
 
     let scrollTop: number;
     if (position === undefined) {
-      if (rowTop >= state.scrollTop && rowBottom <= viewportBottom) {
+      if (rowTop >= state.scrollTop - 0.5 && rowBottom <= viewportBottom + 0.5) {
         return;
       }
       scrollTop =
@@ -519,6 +542,70 @@ export class GridEngine<TData = unknown> {
     const viewportRows = Math.max(1, Math.floor(state.viewportHeight / this.rowHeight));
     const delta = direction === "down" ? viewportRows : -viewportRows;
     this.moveFocusedCell(delta, 0);
+  }
+
+  tabNavigate(forward: boolean): void {
+    const columns = this.getNavigableColumns();
+    if (columns.length === 0) return;
+    const rowCount = this.rowModel.getRowCount();
+    if (rowCount === 0) return;
+
+    const current = this.store.getState().focusedCell;
+    if (!current) {
+      const row = forward ? 0 : rowCount - 1;
+      const col = forward ? columns[0]!.colId : columns[columns.length - 1]!.colId;
+      this.setFocusedCell(row, col);
+      return;
+    }
+
+    const colIndex = Math.max(
+      0,
+      columns.findIndex((col) => col.colId === current.colId),
+    );
+    let nextRow = current.rowIndex;
+    let nextCol = colIndex + (forward ? 1 : -1);
+
+    if (nextCol >= columns.length) {
+      nextCol = 0;
+      nextRow += 1;
+      if (nextRow >= rowCount) nextRow = 0;
+    } else if (nextCol < 0) {
+      nextCol = columns.length - 1;
+      nextRow -= 1;
+      if (nextRow < 0) nextRow = rowCount - 1;
+    }
+
+    this.setFocusedCell(nextRow, columns[nextCol]!.colId);
+  }
+
+  setFocusedHeader(colId: string | null): void {
+    if (colId !== null) {
+      const columns = this.getNavigableColumns();
+      const exists = columns.some((col) => col.colId === colId);
+      if (!exists) return;
+    }
+    this.store.batch(() => {
+      this.store.dispatch({ type: "SET_FOCUSED_HEADER", focusedHeaderColId: colId });
+      if (colId !== null) {
+        this.store.dispatch({ type: "SET_FOCUSED_CELL", focusedCell: null });
+      }
+    });
+  }
+
+  getFocusedHeader(): string | null {
+    return this.store.getState().focusedHeaderColId ?? null;
+  }
+
+  moveHeaderFocus(delta: number): void {
+    const columns = this.getNavigableColumns();
+    if (columns.length === 0) return;
+
+    const current = this.store.getState().focusedHeaderColId;
+    const currentIndex = current
+      ? Math.max(0, columns.findIndex((col) => col.colId === current))
+      : -1;
+    const nextIndex = Math.max(0, Math.min(columns.length - 1, currentIndex + delta));
+    this.setFocusedHeader(columns[nextIndex]!.colId);
   }
 
   getColumnState(): ColumnState[] {
@@ -951,8 +1038,10 @@ export class GridEngine<TData = unknown> {
       rowOffset: virtualRange.rowOffset,
       totalHeight: virtualRange.totalHeight,
       totalWidth: this.columnModel.getTotalWidth(),
+      renderWidth: this.columnModel.getRenderWidth(),
       pinnedLeftWidth: this.columnModel.getPinnedLeftWidth(),
       centerWidth: this.columnModel.getCenterWidth(),
+      centerViewportWidth: this.columnModel.getCenterViewportWidth(),
       pinnedRightWidth: this.columnModel.getPinnedRightWidth(),
       columns,
       pinnedLeftColumns,
@@ -962,6 +1051,7 @@ export class GridEngine<TData = unknown> {
       headerCheckboxState,
       rows,
       focusedCell: state.focusedCell,
+      focusedHeaderColId: state.focusedHeaderColId ?? null,
       editing: state.editing,
     };
 
@@ -971,7 +1061,8 @@ export class GridEngine<TData = unknown> {
       this.lastFrame.virtualRange.rowEnd !== frame.virtualRange.rowEnd ||
       this.lastFrame.rowOffset !== frame.rowOffset ||
       this.lastFrame.totalHeight !== frame.totalHeight ||
-      this.lastFrame.totalWidth !== frame.totalWidth;
+      this.lastFrame.totalWidth !== frame.totalWidth ||
+      this.lastFrame.renderWidth !== frame.renderWidth;
 
     this.lastFrame = frame;
     this.renderer.renderFrame(frame);

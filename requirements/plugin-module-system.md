@@ -151,6 +151,7 @@ ol-grid features are delivered as **opt-in modules** registered via `ModuleRegis
 | `@ol-grid/infinite-row-model` | `InfiniteRowModelModule` | T2 | — | datasource APIs |
 | `@ol-grid/server-side-row-model` | `ServerSideRowModelModule` | T3 | `GroupingModule`? | SSRM refresh APIs |
 | `@ol-grid/range-selection` | `RangeSelectionModule` | T3 | — | `getCellRanges`, `addCellRange` |
+| `@ol-grid/debug` | `DebugModule` | T1 | — | `getDebugCategories`, `setDebug` |
 | `@ol-grid/context-menu` | `ContextMenuModule` | T3 | — | `showContextMenu` |
 | `@ol-grid/tool-panels` | `ToolPanelsModule` | T3 | `FilterModule` | sideBar APIs |
 
@@ -287,4 +288,5 @@ declare module '@ol-grid/core' {
 - [REQUIREMENTS.md](../REQUIREMENTS.md) §6.6, NFR-B-01–B-07, NFR-D-02
 - [ARCHITECTURE.md](../ARCHITECTURE.md) §3.8, §5.2–5.3, §8.2, §9
 - [performance-and-bundle.md](./performance-and-bundle.md)
+- [debug-mode.md](./debug-mode.md)
 - [AG Grid Modules](https://www.ag-grid.com/javascript-data-grid/modules/)

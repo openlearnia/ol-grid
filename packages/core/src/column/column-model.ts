@@ -28,8 +28,11 @@ export class ColumnModel<TData = unknown> {
   private centerColumns: NormalizedColumn<TData>[] = [];
   private pinnedRightColumns: NormalizedColumn<TData>[] = [];
   private totalWidth = 0;
+  /** Outer grid width: viewport when columns overflow, else column sum. */
+  private renderWidth = 0;
   private pinnedLeftWidth = 0;
   private centerWidth = 0;
+  private centerViewportWidth = 0;
   private pinnedRightWidth = 0;
   private includeSelectionColumn = false;
 
@@ -79,12 +82,22 @@ export class ColumnModel<TData = unknown> {
     return this.centerWidth;
   }
 
+  /** Visible width of the center scroll viewport (grid width minus pinned regions). */
+  getCenterViewportWidth(): number {
+    return this.centerViewportWidth;
+  }
+
   getPinnedRightWidth(): number {
     return this.pinnedRightWidth;
   }
 
   getTotalWidth(): number {
     return this.totalWidth;
+  }
+
+  /** Visible grid width: viewport when total column width exceeds it, else total column width. */
+  getRenderWidth(): number {
+    return this.renderWidth;
   }
 
   getByColId(colId: string): NormalizedColumn<TData> | undefined {
@@ -122,10 +135,29 @@ export class ColumnModel<TData = unknown> {
       })
       .filter(({ def }) => !def.hide);
 
-    const widths = this.computeWidths(entries, this.viewportWidth);
-    const baseColumns = entries.map((entry, i) => {
-      const width = widths[i] ?? DEFAULT_WIDTH;
-      const pinned = entry.state?.pinned ?? entry.def.pinned ?? null;
+    const getPinned = (entry: (typeof entries)[number]) =>
+      entry.state?.pinned ?? entry.def.pinned ?? null;
+
+    const pinnedLeftEntries = entries.filter((entry) => getPinned(entry) === "left");
+    const pinnedRightEntries = entries.filter((entry) => getPinned(entry) === "right");
+    const centerEntries = entries.filter((entry) => {
+      const pinned = getPinned(entry);
+      return pinned !== "left" && pinned !== "right";
+    });
+
+    const pinnedLeftWidths = this.computeWidths(pinnedLeftEntries, 0);
+    const pinnedRightWidths = this.computeWidths(pinnedRightEntries, 0);
+
+    const baseColumns = entries.map((entry) => {
+      const pinned = getPinned(entry);
+      let width = DEFAULT_WIDTH;
+      if (pinned === "left") {
+        const i = pinnedLeftEntries.indexOf(entry);
+        width = pinnedLeftWidths[i] ?? DEFAULT_WIDTH;
+      } else if (pinned === "right") {
+        const i = pinnedRightEntries.indexOf(entry);
+        width = pinnedRightWidths[i] ?? DEFAULT_WIDTH;
+      }
       return {
         colId: entry.colId,
         def: entry.def,
@@ -173,10 +205,6 @@ export class ColumnModel<TData = unknown> {
     const pinnedRightAssigned = this.assignLeftOffsets(pinnedRightWithWidths);
     const pinnedRightWidth = pinnedRightAssigned.reduce((sum, col) => sum + col.width, 0);
 
-    const centerEntries = entries.filter(({ state, def }) => {
-      const pinned = state?.pinned ?? def.pinned ?? null;
-      return pinned !== "left" && pinned !== "right";
-    });
     const centerViewport = Math.max(0, this.viewportWidth - pinnedLeftWidth - pinnedRightWidth);
     const centerWidths = this.computeWidths(centerEntries, centerViewport);
     const centerWithWidths = centerRaw.map((col, i) => ({
@@ -190,8 +218,13 @@ export class ColumnModel<TData = unknown> {
     this.columns = [...this.pinnedLeftColumns, ...this.centerColumns, ...this.pinnedRightColumns];
     this.pinnedLeftWidth = pinnedLeftWidth;
     this.centerWidth = this.centerColumns.reduce((sum, col) => sum + col.width, 0);
+    this.centerViewportWidth = centerViewport;
     this.pinnedRightWidth = pinnedRightWidth;
     this.totalWidth = this.pinnedLeftWidth + this.centerWidth + this.pinnedRightWidth;
+    this.renderWidth =
+      this.viewportWidth > 0 && this.totalWidth > this.viewportWidth
+        ? this.viewportWidth
+        : this.totalWidth;
   }
 
   private assignLeftOffsets(columns: NormalizedColumn<TData>[]): NormalizedColumn<TData>[] {

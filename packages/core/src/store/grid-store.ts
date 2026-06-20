@@ -15,6 +15,7 @@ export type GridAction =
   | { type: "SET_COLUMNS"; columns: ColumnState[] }
   | { type: "SET_SELECTION"; selection: SelectionState }
   | { type: "SET_FOCUSED_CELL"; focusedCell: CellPosition | null }
+  | { type: "SET_FOCUSED_HEADER"; focusedHeaderColId: string | null }
   | { type: "SET_EDITING"; editing: EditingState | null }
   | { type: "SET_QUICK_FILTER"; quickFilterText: string }
   | { type: "BUMP_ROW_DATA_VERSION" };
@@ -39,6 +40,7 @@ function createInitialState(gridId: string): GridState {
     viewportWidth: 0,
     viewportHeight: 0,
     focusedCell: null,
+    focusedHeaderColId: null,
     editing: null,
     quickFilterText: "",
     rowModelType: "clientSide",
@@ -60,6 +62,8 @@ function gridReducer(state: GridState, action: GridAction): GridState {
       return { ...state, selection: action.selection };
     case "SET_FOCUSED_CELL":
       return { ...state, focusedCell: action.focusedCell };
+    case "SET_FOCUSED_HEADER":
+      return { ...state, focusedHeaderColId: action.focusedHeaderColId };
     case "SET_EDITING":
       return { ...state, editing: action.editing };
     case "SET_QUICK_FILTER":

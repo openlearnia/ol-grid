@@ -1,6 +1,101 @@
 import { OlGrid, type OlGridHandle } from "@ol-grid/react";
-import { StrictMode, useCallback, useMemo, useRef, useState } from "react";
+import { StrictMode, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+
+type DemoColumnDef = {
+  id?: string;
+  field?: string;
+  headerName?: string;
+  width?: number;
+  minWidth?: number;
+  flex?: number;
+  pinned?: "left" | "right" | null;
+  sortable?: boolean;
+  editable?: boolean;
+  cellEditor?: string;
+  cellEditorParams?: Record<string, unknown>;
+  cellRenderer?: string | unknown;
+  valueParser?: unknown;
+  valueSetter?: unknown;
+  valueFormatter?: unknown;
+};
+
+const COLUMN_CONFIG_HEADERS = [
+  "colId",
+  "field",
+  "headerName",
+  "width",
+  "flex",
+  "minWidth",
+  "pinned",
+  "sortable",
+  "editable",
+  "cellEditor",
+  "cellEditorParams",
+  "cellRenderer",
+  "valueParser",
+  "valueSetter",
+  "valueFormatter",
+] as const;
+
+function formatConfigCell(value: unknown): string {
+  if (value === undefined) return "—";
+  if (value === null) return "null";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "function") return "fn";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function columnDefToConfigRow(col: DemoColumnDef, index: number): Record<string, string> {
+  const colId = col.id ?? col.field ?? `col-${index}`;
+  return {
+    colId,
+    field: formatConfigCell(col.field),
+    headerName: formatConfigCell(col.headerName),
+    width: formatConfigCell(col.width),
+    flex: formatConfigCell(col.flex),
+    minWidth: formatConfigCell(col.minWidth),
+    pinned: formatConfigCell(col.pinned),
+    sortable: formatConfigCell(col.sortable),
+    editable: formatConfigCell(col.editable),
+    cellEditor: formatConfigCell(col.cellEditor),
+    cellEditorParams: formatConfigCell(col.cellEditorParams),
+    cellRenderer: formatConfigCell(col.cellRenderer),
+    valueParser: formatConfigCell(col.valueParser),
+    valueSetter: formatConfigCell(col.valueSetter),
+    valueFormatter: formatConfigCell(col.valueFormatter),
+  };
+}
+
+function ColumnConfigTable({ columnDefs }: { columnDefs: DemoColumnDef[] }): ReactNode {
+  const rows = columnDefs.map(columnDefToConfigRow);
+  return (
+    <section className="demo-column-config">
+      <h2>Column configuration</h2>
+      <div className="demo-column-config-scroll">
+        <table>
+          <thead>
+            <tr>
+              {COLUMN_CONFIG_HEADERS.map((header) => (
+                <th key={header}>{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.colId}>
+                {COLUMN_CONFIG_HEADERS.map((header) => (
+                  <td key={header}>{row[header]}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 interface Person {
   id: number;
@@ -151,6 +246,7 @@ function App() {
           }}
         />
       </div>
+      <ColumnConfigTable columnDefs={columnDefs} />
     </div>
   );
 }

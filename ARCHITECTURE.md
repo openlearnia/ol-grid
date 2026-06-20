@@ -459,6 +459,7 @@ RevoGrid's "full access to grid providers" model — plugins can hook viewport s
 | `Filter` | Custom filter UI + logic |
 | `RowModel` | Custom data source |
 | `GridPlugin` | Cross-cutting (export, context menu) |
+| `DebugModule` | Opt-in namespaced console logging — see [debug-mode.md](./requirements/debug-mode.md) |
 | `ThemePlugin` | Design token overrides |
 
 ---

@@ -34,6 +34,7 @@ export interface GridState {
   sorting?: SortingState;
   selection?: SelectionState;
   focusedCell: CellPosition | null;
+  focusedHeaderColId: string | null;
   editing: EditingState | null;
   quickFilterText: string;
   rowModelType: RowModelType;
