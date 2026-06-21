@@ -62,13 +62,25 @@
 
 .ol-grid__filter-button {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
   color: var(--ol-grid-muted-color);
   cursor: pointer;
   padding: 0 0.15rem;
-  font-size: 0.8rem;
   line-height: 1;
+}
+
+.ol-grid__icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.ol-grid__filter-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .ol-grid__filter-button--active {
@@ -166,6 +178,7 @@
   padding: 0.2rem 0.4rem;
   border: 1px solid var(--ol-grid-border-color);
   border-radius: 4px;
+  user-select: text;
 }
 
 .ol-grid__header-pinned-left {
@@ -240,10 +253,16 @@
 }
 
 .ol-grid__sort-indicator {
+  display: inline-flex;
+  align-items: center;
   color: var(--ol-grid-muted-color);
-  font-size: 0.75rem;
   line-height: 1;
   flex-shrink: 0;
+}
+
+.ol-grid__sort-icon {
+  width: 12px;
+  height: 12px;
 }
 
 .ol-grid__resize-handle {

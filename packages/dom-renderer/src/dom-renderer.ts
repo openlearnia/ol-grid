@@ -22,8 +22,10 @@ import {
   createFilterButton,
   createFloatingFilterInput,
   mountFilterPopup,
+  syncFloatingFilterInputValue,
   type FilterModelEntry,
 } from "./filter-ui.js";
+import { createSortAscIcon, createSortDescIcon } from "./icons.js";
 
 const THEME_STYLE_ID = "ol-grid-dom-theme";
 const KEYBOARD_LOG_PREFIX = "[ol-grid:keyboard]";
@@ -328,6 +330,7 @@ export class DomRenderer implements RendererAdapter {
     bodyInner.addEventListener("mouseover", this.handleBodyMouseOver);
     bodyInner.addEventListener("mouseleave", this.handleBodyMouseLeave);
       host.addEventListener("focus", this.handleHostFocus);
+    host.addEventListener("focusin", this.handleHostFocusIn);
     sentinelBefore.addEventListener("focus", this.handleSentinelBeforeFocus);
     sentinelAfter.addEventListener("focus", this.handleSentinelAfterFocus);
     document.addEventListener("keydown", this.handleKeyDown, true);
@@ -356,6 +359,7 @@ export class DomRenderer implements RendererAdapter {
     this.bodyInner?.removeEventListener("mouseover", this.handleBodyMouseOver);
     this.bodyInner?.removeEventListener("mouseleave", this.handleBodyMouseLeave);
     this.host?.removeEventListener("focus", this.handleHostFocus);
+    this.host?.removeEventListener("focusin", this.handleHostFocusIn);
     this.sentinelBefore?.removeEventListener("focus", this.handleSentinelBeforeFocus);
     this.sentinelAfter?.removeEventListener("focus", this.handleSentinelAfterFocus);
     document.removeEventListener("keydown", this.handleKeyDown, true);
@@ -1017,20 +1021,23 @@ export class DomRenderer implements RendererAdapter {
     }
 
     const target = (mouseEvent.target as HTMLElement | null)?.closest<HTMLElement>(
-      "[data-col-id]",
+      "[data-col-id][role='columnheader']",
     );
     if (!target || !this.engine) return;
 
+    const engine = this.engine;
     const colId = target.dataset.colId;
     if (!colId) return;
 
     event.stopPropagation();
-    this.engine.setFocusedHeader(colId);
 
     const sortable = target.dataset.sortable === "true";
-    if (sortable) {
-      this.engine.toggleColumnSort(colId);
-    }
+    engine.getStore().batch(() => {
+      engine.setFocusedHeader(colId);
+      if (sortable) {
+        engine.toggleColumnSort(colId);
+      }
+    });
 
     // Re-render from setFocusedHeader/sort replaces header nodes; syncFocusRing restores focus.
     this.focusHeader(colId);
@@ -1165,6 +1172,7 @@ export class DomRenderer implements RendererAdapter {
   private readonly handleHostFocus = (): void => {
     if (!this.engine) return;
     if (this.nativeScrollbarActive || this.scrollbarDragging) return;
+    if (this.isFilterControl(document.activeElement)) return;
     const state = this.engine.getStore().getState();
     if (state.focusedCell) {
       this.focusCurrentStoreCell();
@@ -1176,11 +1184,96 @@ export class DomRenderer implements RendererAdapter {
       return;
     }
 
+    this.focusFirstGridEntry();
+  };
+
+  private readonly handleHostFocusIn = (event: FocusEvent): void => {
+    if (!this.engine) return;
+    const target = event.target;
+    if (!this.isFilterControl(target)) return;
+
+    if (this.engine.getFocusedHeader()) {
+      this.engine.setFocusedHeader(null);
+    }
+    if (this.engine.getFocusedCell()) {
+      this.engine.clearFocusedCell();
+    }
+  };
+
+  private isFilterControl(el: Element | EventTarget | null): boolean {
+    if (!el || !(el instanceof Element)) return false;
+    return !!el.closest(
+      "[data-floating-filter-input], [data-filter-popup-control], [data-filter-popup='true']",
+    );
+  }
+
+  private isFloatingFilterInput(el: Element | EventTarget | null): el is HTMLInputElement {
+    return (
+      el instanceof HTMLInputElement &&
+      el.dataset.floatingFilterInput === "true"
+    );
+  }
+
+  private getFloatingFilterInputs(): HTMLInputElement[] {
+    if (!this.floatingFilters || this.floatingFilters.hidden) return [];
+    const inputs: HTMLInputElement[] = [];
+    for (const container of [
+      this.floatingPinnedLeft,
+      this.floatingCenterRow,
+      this.floatingPinnedRight,
+    ]) {
+      if (!container) continue;
+      for (const input of container.querySelectorAll<HTMLInputElement>(
+        "[data-floating-filter-input]",
+      )) {
+        inputs.push(input);
+      }
+    }
+    return inputs;
+  }
+
+  private focusFirstGridEntry(): void {
+    if (!this.engine) return;
+
+    const filterInputs = this.getFloatingFilterInputs();
+    if (filterInputs.length > 0) {
+      filterInputs[0]!.focus({ preventScroll: true });
+      return;
+    }
+
     const columns = this.engine.getNavigableColumns();
     if (columns.length === 0) return;
     this.engine.setFocusedHeader(columns[0]!.colId);
     this.focusHeader(columns[0]!.colId);
-  };
+  }
+
+  private handleFilterControlKeyDown(event: KeyboardEvent): void {
+    if (!this.engine) return;
+
+    const active = document.activeElement;
+    if (!this.isFloatingFilterInput(active) || event.key !== "Tab") return;
+
+    const inputs = this.getFloatingFilterInputs();
+    const idx = inputs.indexOf(active);
+    if (idx < 0) return;
+
+    if (event.shiftKey && idx === 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.exitGridTab("before");
+      return;
+    }
+
+    if (!event.shiftKey && idx === inputs.length - 1) {
+      event.preventDefault();
+      event.stopPropagation();
+      const headerCols = this.engine.getNavigableColumns();
+      if (headerCols.length > 0) {
+        this.engine.setFocusedHeader(headerCols[0]!.colId);
+        this.focusHeader(headerCols[0]!.colId);
+      }
+    }
+  }
 
   private readonly handleSentinelBeforeFocus = (): void => {
     this.redirectSentinelFocus("first");
@@ -1200,6 +1293,11 @@ export class DomRenderer implements RendererAdapter {
     }
 
     if (edge === "first") {
+      const filterInputs = this.getFloatingFilterInputs();
+      if (filterInputs.length > 0) {
+        filterInputs[0]!.focus({ preventScroll: true });
+        return;
+      }
       this.engine.setFocusedHeader(columns[0]!.colId);
       this.keyboardNavFocusPending = true;
       this.scheduleFocusAfterKeyboardNav();
@@ -1219,6 +1317,7 @@ export class DomRenderer implements RendererAdapter {
     if (!this.host) return false;
     const active = document.activeElement;
     if (active) {
+      if (this.isFilterControl(active)) return true;
       if (
         active === this.host ||
         active === this.sentinelBefore ||
@@ -1229,6 +1328,7 @@ export class DomRenderer implements RendererAdapter {
       }
     }
     const target = event.target as Node | null;
+    if (target && this.isFilterControl(target)) return true;
     return !!(target && this.host.contains(target));
   }
 
@@ -1241,6 +1341,14 @@ export class DomRenderer implements RendererAdapter {
         target: describeElement(event.target as Element),
         ...this.keyboardLogContext(),
       });
+      return;
+    }
+
+    if (
+      this.isFilterControl(document.activeElement) ||
+      this.isFilterControl(event.target)
+    ) {
+      this.handleFilterControlKeyDown(event);
       return;
     }
 
@@ -1340,10 +1448,18 @@ export class DomRenderer implements RendererAdapter {
               this.engine.moveHeaderFocus(-1);
               this.focusHeader(this.engine.getFocusedHeader()!);
             } else {
-              // first header → exit grid to previous focusable outside
-              event.preventDefault();
-              event.stopPropagation();
-              this.exitGridTab("before");
+              const filterInputs = this.getFloatingFilterInputs();
+              if (filterInputs.length > 0) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.engine.setFocusedHeader(null);
+                filterInputs[filterInputs.length - 1]!.focus({ preventScroll: true });
+              } else {
+                // first header → exit grid to previous focusable outside
+                event.preventDefault();
+                event.stopPropagation();
+                this.exitGridTab("before");
+              }
             }
           } else {
             event.preventDefault();
@@ -1480,13 +1596,20 @@ export class DomRenderer implements RendererAdapter {
             }
           } else {
             if (isHostFocused && !focusedCell && !focusedHeaderColId) {
-              const headerCols = this.engine!.getNavigableColumns();
-              if (headerCols.length > 0) {
+              const filterInputs = this.getFloatingFilterInputs();
+              if (filterInputs.length > 0) {
                 event.preventDefault();
                 event.stopPropagation();
-                this.engine!.setFocusedHeader(headerCols[0]!.colId);
-                this.keyboardNavFocusPending = true;
-                this.scheduleFocusAfterKeyboardNav();
+                filterInputs[0]!.focus({ preventScroll: true });
+              } else {
+                const headerCols = this.engine!.getNavigableColumns();
+                if (headerCols.length > 0) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  this.engine!.setFocusedHeader(headerCols[0]!.colId);
+                  this.keyboardNavFocusPending = true;
+                  this.scheduleFocusAfterKeyboardNav();
+                }
               }
             } else if (focusedCell) {
               const columns = this.engine!.getNavigableColumns();
@@ -1688,8 +1811,11 @@ export class DomRenderer implements RendererAdapter {
 
       const indicator = document.createElement("span");
       indicator.className = "ol-grid__sort-indicator";
-      indicator.textContent =
-        column.sort === "asc" ? "▲" : column.sort === "desc" ? "▼" : "";
+      if (column.sort === "asc") {
+        indicator.appendChild(createSortAscIcon());
+      } else if (column.sort === "desc") {
+        indicator.appendChild(createSortDescIcon());
+      }
 
       const children: HTMLElement[] = [label, indicator];
       if (column.filterType) {
@@ -1716,34 +1842,57 @@ export class DomRenderer implements RendererAdapter {
   ): void {
     if (!this.engine) return;
 
+    const existing = new Map(
+      [...container.children].map((child) => [
+        (child as HTMLElement).dataset.colId,
+        child as HTMLElement,
+      ]),
+    );
+
     const nextChildren: HTMLElement[] = [];
 
     for (const column of columns) {
-      const cell = document.createElement("div");
-      cell.className = "ol-grid__floating-filter-host";
+      let cell = existing.get(column.colId);
+      if (!cell) {
+        cell = document.createElement("div");
+        cell.className = "ol-grid__floating-filter-host";
+        cell.dataset.colId = column.colId;
+      }
+
       cell.style.width = `${column.width}px`;
-      cell.dataset.colId = column.colId;
 
       if (column.floatingFilter && column.filterType) {
-        cell.appendChild(
-          createFloatingFilterInput(
-            column,
-            frame.filterModel[column.colId],
-            (model) => {
-              this.engine?.applyColumnFilterFromUi(
-                column.colId,
-                model as FilterModelEntry | null,
-                "floating",
-              );
-            },
-          ),
-        );
+        const input = cell.querySelector<HTMLInputElement>("[data-floating-filter-input]");
+        if (!input) {
+          cell.replaceChildren(
+            createFloatingFilterInput(
+              column,
+              frame.filterModel[column.colId],
+              (model) => {
+                this.engine?.applyColumnFilterFromUi(
+                  column.colId,
+                  model as FilterModelEntry | null,
+                  "floating",
+                );
+              },
+            ),
+          );
+        } else {
+          syncFloatingFilterInputValue(input, column, frame.filterModel[column.colId]);
+        }
+      } else {
+        cell.replaceChildren();
       }
 
       nextChildren.push(cell);
     }
 
-    container.replaceChildren(...nextChildren);
+    const needsReplace =
+      nextChildren.length !== container.children.length ||
+      nextChildren.some((child, index) => child !== container.children[index]);
+    if (needsReplace) {
+      container.replaceChildren(...nextChildren);
+    }
   }
 
   private renderRows(frame: RenderFrame): void {
@@ -2053,6 +2202,10 @@ export class DomRenderer implements RendererAdapter {
 
   private syncFocusRing(frame: RenderFrame): void {
     if (frame.editing) return;
+
+    if (this.isFilterControl(document.activeElement)) {
+      return;
+    }
 
     const active = document.activeElement;
     const focusInsideGrid =

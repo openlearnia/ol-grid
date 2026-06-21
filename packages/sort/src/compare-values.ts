@@ -1,3 +1,8 @@
+const DEFAULT_COLLATOR = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
+
 export function compareValues(a: unknown, b: unknown): number {
   if (a === b) return 0;
   if (a === null || a === undefined) return -1;
@@ -15,5 +20,9 @@ export function compareValues(a: unknown, b: unknown): number {
     return a.getTime() - b.getTime();
   }
 
-  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+  return DEFAULT_COLLATOR.compare(String(a), String(b));
+}
+
+export function compareSortKeys(a: string, b: string): number {
+  return DEFAULT_COLLATOR.compare(a, b);
 }

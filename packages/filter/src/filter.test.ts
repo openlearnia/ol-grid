@@ -105,4 +105,23 @@ describe("applyColumnFilters", () => {
     const filtered = applyColumnFilters(rows, columnDefs, {}, null, null);
     expect(filtered).toHaveLength(3);
   });
+
+  it("filters 10k rows within a generous CI threshold", () => {
+    const largeRows = Array.from({ length: 10_000 }, (_, index) =>
+      node({ name: `User ${index}`, salary: index * 100, startYear: 2020 }, index),
+    );
+
+    const start = performance.now();
+    const filtered = applyColumnFilters(
+      largeRows,
+      [{ field: "name" as const, filter: "text" as const }],
+      { name: { filterType: "text", type: "contains", filter: "User 1" } },
+      null,
+      null,
+    );
+    const elapsed = performance.now() - start;
+
+    expect(filtered.length).toBeGreaterThan(0);
+    expect(elapsed).toBeLessThan(500);
+  });
 });

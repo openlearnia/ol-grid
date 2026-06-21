@@ -4,6 +4,7 @@ import {
   applySingleColumnSort,
   applySortModel,
   getSortModel,
+  sortModelsEqual,
   sortRowNodes,
   toggleColumnSort,
 } from "./sort.js";
@@ -22,12 +23,15 @@ function createSortStage(): import("@ol-grid/core").RowModelStage {
       const colDef = ctx.columnDefs.find((def, index) => resolveColId(def, index) === colId);
       if (!colDef) return rows;
 
-      return sortRowNodes(
-        rows,
-        sort,
-        (node) => getCellValue(node, colDef, ctx.api, ctx.context),
-        colDef.comparator,
-      );
+      const field = colDef.field;
+      const useDirectField = !!field && !colDef.valueGetter && !colDef.comparator;
+      const getValue = useDirectField
+        ? (node: import("@ol-grid/core").RowNode) =>
+            (node.data as Record<string, unknown> | undefined)?.[field]
+        : (node: import("@ol-grid/core").RowNode) =>
+            getCellValue(node, colDef, ctx.api, ctx.context);
+
+      return sortRowNodes(rows, sort, getValue, colDef.comparator);
     },
   };
 }
@@ -37,17 +41,22 @@ export function createSortController(ctx: GridContext) {
 
   return {
     toggleColumnSort(colId: string): void {
-      const state = ctx.getStore().getState();
-      const current = state.columns.find((column) => column.colId === colId)?.sort ?? null;
-      const nextSort = toggleColumnSort(current);
-      const columns = applySingleColumnSort(state.columns, colId, nextSort);
+      ctx.getStore().batch(() => {
+        const state = ctx.getStore().getState();
+        const current = state.columns.find((column) => column.colId === colId)?.sort ?? null;
+        const nextSort = toggleColumnSort(current);
+        const columns = applySingleColumnSort(state.columns, colId, nextSort);
+        const nextModel = getSortModel(columns);
+        const previousModel = getSortModel(state.columns);
+        if (sortModelsEqual(previousModel, nextModel)) return;
 
-      engine.getColumnModel().setColumnState(columns);
-      ctx.getStore().dispatch({ type: "SET_COLUMNS", columns });
-      engine.rebuildRowModel(columns);
-      const options = ctx.getOptions() as GridOptions;
-      options.sortModel = getSortModel(columns);
-      options.onSortChanged?.({ api: ctx.getApi(), source: "uiColumnSorted" });
+        engine.getColumnModel().setColumnState(columns);
+        ctx.getStore().dispatch({ type: "SET_COLUMNS", columns });
+        engine.rebuildRowModel(columns);
+        const options = ctx.getOptions() as GridOptions;
+        options.sortModel = nextModel;
+        options.onSortChanged?.({ api: ctx.getApi(), source: "uiColumnSorted" });
+      });
     },
 
     getSortModel() {
@@ -58,13 +67,18 @@ export function createSortController(ctx: GridContext) {
       model: Array<{ colId: string; sort: "asc" | "desc" }>,
       source: "api" | "uiColumnSorted" = "api",
     ): void {
-      const columns = applySortModel(ctx.getStore().getState().columns, model);
-      const options = ctx.getOptions() as GridOptions;
-      options.sortModel = model;
-      engine.getColumnModel().setColumnState(columns);
-      ctx.getStore().dispatch({ type: "SET_COLUMNS", columns });
-      engine.rebuildRowModel(columns);
-      options.onSortChanged?.({ api: ctx.getApi(), source });
+      ctx.getStore().batch(() => {
+        const current = getSortModel(ctx.getStore().getState().columns);
+        if (sortModelsEqual(current, model)) return;
+
+        const columns = applySortModel(ctx.getStore().getState().columns, model);
+        const options = ctx.getOptions() as GridOptions;
+        options.sortModel = model;
+        engine.getColumnModel().setColumnState(columns);
+        ctx.getStore().dispatch({ type: "SET_COLUMNS", columns });
+        engine.rebuildRowModel(columns);
+        options.onSortChanged?.({ api: ctx.getApi(), source });
+      });
     },
 
     rebuildFromColumns(columns: import("@ol-grid/core").ColumnState[]): void {
@@ -80,9 +94,7 @@ export const SortModule: GridModule = {
   version: "0.0.0",
   rowModelStages: [createSortStage()],
   onGridCreate(ctx) {
-    const controller = createSortController(ctx);
-    ctx.getEngine().setSortController(controller);
-    ctx.registerRowModelStage(createSortStage());
+    ctx.getEngine().setSortController(createSortController(ctx));
   },
   onGridDestroy(ctx) {
     ctx.getEngine().setSortController(null);

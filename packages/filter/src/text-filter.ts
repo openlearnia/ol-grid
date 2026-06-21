@@ -1,31 +1,34 @@
 import type { TextFilterModel } from "./types.js";
 
-function normalizeText(value: unknown): string {
+export function normalizeFilterText(value: unknown): string {
   if (value === null || value === undefined) return "";
   return String(value).toLowerCase();
 }
 
-export function doesTextFilterPass(value: unknown, model: TextFilterModel): boolean {
-  const haystack = normalizeText(value);
-  const needle = normalizeText(model.filter);
+export function doesTextFilterPass(
+  value: unknown,
+  model: TextFilterModel,
+  normalizedNeedle = normalizeFilterText(model.filter),
+): boolean {
+  const haystack = normalizeFilterText(value);
 
-  if (needle === "" && model.type !== "equals" && model.type !== "notEqual") {
+  if (normalizedNeedle === "" && model.type !== "equals" && model.type !== "notEqual") {
     return true;
   }
 
   switch (model.type) {
     case "contains":
-      return haystack.includes(needle);
+      return haystack.includes(normalizedNeedle);
     case "notContains":
-      return !haystack.includes(needle);
+      return !haystack.includes(normalizedNeedle);
     case "equals":
-      return haystack === needle;
+      return haystack === normalizedNeedle;
     case "notEqual":
-      return haystack !== needle;
+      return haystack !== normalizedNeedle;
     case "startsWith":
-      return haystack.startsWith(needle);
+      return haystack.startsWith(normalizedNeedle);
     case "endsWith":
-      return haystack.endsWith(needle);
+      return haystack.endsWith(normalizedNeedle);
     default:
       return true;
   }

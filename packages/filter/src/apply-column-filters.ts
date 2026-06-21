@@ -5,8 +5,8 @@ import type { ColumnFilterModel, FilterModel } from "./types.js";
 import { doesDateFilterPass } from "./date-filter.js";
 import { getFilterValue } from "./get-filter-value.js";
 import { doesNumberFilterPass } from "./number-filter.js";
-import { columnHasFilter, resolveFilterType } from "./resolve-filter-type.js";
-import { doesTextFilterPass } from "./text-filter.js";
+import { columnHasFilter } from "./resolve-filter-type.js";
+import { doesTextFilterPass, normalizeFilterText } from "./text-filter.js";
 
 export function isColumnFilterActive(model: ColumnFilterModel | undefined): boolean {
   if (!model) return false;
@@ -33,22 +33,49 @@ export function isFilterModelActive(model: FilterModel): boolean {
   return Object.values(model).some(isColumnFilterActive);
 }
 
-function doesColumnFilterPass<TData>(
+interface PreparedColumnFilter<TData> {
+  def: ColumnDef<TData>;
+  model: ColumnFilterModel;
+  normalizedTextNeedle?: string;
+}
+
+function prepareActiveFilters<TData>(
+  filterModel: FilterModel,
+  filterableColumns: Array<{ def: ColumnDef<TData>; colId: string }>,
+): PreparedColumnFilter<TData>[] {
+  const columnById = new Map(filterableColumns.map((entry) => [entry.colId, entry.def]));
+  const prepared: PreparedColumnFilter<TData>[] = [];
+
+  for (const [colId, model] of Object.entries(filterModel)) {
+    if (!isColumnFilterActive(model)) continue;
+    const def = columnById.get(colId);
+    if (!def) continue;
+
+    const entry: PreparedColumnFilter<TData> = { def, model };
+    if (model.filterType === "text") {
+      entry.normalizedTextNeedle = normalizeFilterText(model.filter);
+    }
+    prepared.push(entry);
+  }
+
+  return prepared;
+}
+
+function doesPreparedFilterPass<TData>(
   node: RowNode<TData>,
-  colDef: ColumnDef<TData>,
-  model: ColumnFilterModel,
+  prepared: PreparedColumnFilter<TData>,
   api: unknown,
   context: unknown,
 ): boolean {
-  const value = getFilterValue(node, colDef, api, context);
+  const value = getFilterValue(node, prepared.def, api, context);
 
-  switch (model.filterType) {
+  switch (prepared.model.filterType) {
     case "text":
-      return doesTextFilterPass(value, model);
+      return doesTextFilterPass(value, prepared.model, prepared.normalizedTextNeedle);
     case "number":
-      return doesNumberFilterPass(value, model);
+      return doesNumberFilterPass(value, prepared.model);
     case "date":
-      return doesDateFilterPass(value, model);
+      return doesDateFilterPass(value, prepared.model);
     default:
       return true;
   }
@@ -61,28 +88,32 @@ export function applyColumnFilters<TData>(
   api: unknown,
   context: unknown,
 ): RowNode<TData>[] {
-  const activeEntries = Object.entries(filterModel).filter(([, model]) =>
-    isColumnFilterActive(model),
+  const activeFilters = prepareActiveFilters(
+    filterModel,
+    columnDefs
+      .map((def, index) => ({ def, colId: resolveColId(def, index) }))
+      .filter(({ def }) => columnHasFilter(def)),
   );
 
-  if (activeEntries.length === 0) {
+  if (activeFilters.length === 0) {
     return rows;
   }
 
-  const filterableColumns = columnDefs
-    .map((def, index) => ({ def, colId: resolveColId(def, index) }))
-    .filter(({ def }) => columnHasFilter(def));
-
-  return rows.filter((node) => {
-    for (const [colId, model] of activeEntries) {
-      const column = filterableColumns.find((entry) => entry.colId === colId);
-      if (!column) continue;
-      if (!doesColumnFilterPass(node, column.def, model, api, context)) {
-        return false;
+  const result: RowNode<TData>[] = [];
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    const node = rows[rowIndex]!;
+    let passes = true;
+    for (let filterIndex = 0; filterIndex < activeFilters.length; filterIndex++) {
+      if (!doesPreparedFilterPass(node, activeFilters[filterIndex]!, api, context)) {
+        passes = false;
+        break;
       }
     }
-    return true;
-  });
+    if (passes) {
+      result.push(node);
+    }
+  }
+  return result;
 }
 
 export function createEmptyFilterModelForType(
@@ -96,4 +127,15 @@ export function createEmptyFilterModelForType(
     default:
       return { filterType: "text", type: "contains", filter: "" };
   }
+}
+
+export function filterModelsEqual(left: FilterModel, right: FilterModel): boolean {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  for (const key of leftKeys) {
+    if (!Object.prototype.hasOwnProperty.call(right, key)) return false;
+    if (JSON.stringify(left[key]) !== JSON.stringify(right[key])) return false;
+  }
+  return true;
 }

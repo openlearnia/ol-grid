@@ -1,4 +1,5 @@
 import type { RenderColumn } from "@ol-grid/core";
+import { createFilterIcon } from "./icons.js";
 
 type FilterType = "text" | "number" | "date";
 
@@ -142,7 +143,7 @@ export function createFilterButton(colId: string, active: boolean): HTMLButtonEl
   button.dataset.colId = colId;
   button.setAttribute("aria-label", "Open filter");
   button.title = "Filter";
-  button.textContent = "⛃";
+  button.replaceChildren(createFilterIcon());
   button.classList.toggle("ol-grid__filter-button--active", active);
   return button;
 }
@@ -174,6 +175,8 @@ export function mountFilterPopup(options: FilterPopupOptions): () => void {
 
   const operator = document.createElement("select");
   operator.className = "ol-grid__filter-popup-operator";
+  operator.tabIndex = 0;
+  operator.dataset.filterPopupControl = "true";
   operator.setAttribute("aria-label", "Filter operator");
   for (const [value, label] of operatorOptions(options.filterType)) {
     const option = document.createElement("option");
@@ -187,12 +190,16 @@ export function mountFilterPopup(options: FilterPopupOptions): () => void {
   primary.className = "ol-grid__filter-popup-input";
   primary.type = primaryInputType(draft);
   primary.value = readPrimaryValue(draft);
+  primary.tabIndex = 0;
+  primary.dataset.filterPopupControl = "true";
   primary.setAttribute("aria-label", "Filter value");
 
   const secondary = document.createElement("input");
   secondary.className = "ol-grid__filter-popup-input ol-grid__filter-popup-input--secondary";
   secondary.type = primaryInputType(draft);
   secondary.value = readSecondaryValue(draft);
+  secondary.tabIndex = 0;
+  secondary.dataset.filterPopupControl = "true";
   secondary.setAttribute("aria-label", "Filter second value");
   secondary.hidden = !needsSecondaryInput(draft);
 
@@ -305,6 +312,8 @@ export function createFloatingFilterInput(
   input.type = primaryInputType(draft);
   input.placeholder = `Filter ${column.headerName}`;
   input.value = readPrimaryValue(draft);
+  input.tabIndex = 0;
+  input.dataset.floatingFilterInput = "true";
   input.setAttribute("aria-label", `Floating filter ${column.headerName}`);
 
   const scheduleApply = () => {
@@ -321,6 +330,21 @@ export function createFloatingFilterInput(
 
   wrapper.appendChild(input);
   return wrapper;
+}
+
+/** Sync floating filter input from store when it is not actively focused. */
+export function syncFloatingFilterInputValue(
+  input: HTMLInputElement,
+  column: RenderColumn,
+  model: unknown,
+): void {
+  if (document.activeElement === input) return;
+  const filterType = column.filterType ?? "text";
+  const draft = modelFromState(filterType, model);
+  const nextValue = readPrimaryValue(draft);
+  if (input.value !== nextValue) {
+    input.value = nextValue;
+  }
 }
 
 export type { FilterModelEntry, FilterType };

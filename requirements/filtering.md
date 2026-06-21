@@ -159,6 +159,8 @@ Filtering reduces the set of displayed rows based on column-level criteria, a gl
 | REQ-FL-22 | Floating filter changes MUST debounce (default 500ms) before applying | Should |
 | REQ-FL-23 | `suppressFloatingFilterButton: true` MUST hide filter menu button in floating cell | Could |
 | REQ-FL-24 | Floating filter row height MUST be themable via `--ol-grid-floating-filter-height` | Should |
+| REQ-FL-25 | Floating filter inputs MUST be focusable via click and Tab; grid keyboard handler MUST NOT steal keys while focused | Must |
+| REQ-FL-26 | Filter popup inputs MUST be focusable and excluded from grid keyboard interception while open | Must |
 
 ### 4.4 Set filter (Tier 3)
 

@@ -65,6 +65,7 @@ Navigation MUST work identically across React, Vue, Angular, Svelte, vanilla, an
 | Page Up / Page Down | **Not implemented** | |
 | Ctrl+Home / Ctrl+End | **Not implemented** | |
 | Tab / Shift+Tab between cells | **Partial** | Header→body dual behavior implemented |
+| Floating filter Tab order | **Implemented** | Toolbar → floating filters → headers → body |
 | Space toggles row selection | **Not implemented** | |
 | Shift+arrow range extend | **Not implemented** | |
 | `navigateToNextCell` callback | **Not implemented** | |
@@ -183,6 +184,23 @@ When the user presses `Tab` on the **last column header**, focus enters the body
 2. **Fresh entry / scrolled viewport (fallback):** If there is no valid prior body cell for this header visit (e.g. Tab into grid via host → headers only, or header click without body focus), `Tab` focuses the **first visible navigable body cell** — the top row in the current viewport (`floor(scrollTop / rowHeight)`), first navigable column in tab order (selection/checkbox columns skipped per `getNavigableColumns`).
 
 **Priority:** valid `lastBodyFocusedCell` → restore; else → first visible navigable cell.
+
+### 4.5.2 Floating filter Tab order (T2)
+
+When `showFloatingFilters` is true, focus entry and Tab traversal follow this order:
+
+1. **Toolbar / page focusables** before the grid
+2. **Floating filter inputs** — left to right (pinned-left → center → pinned-right); native Tab moves between inputs in this row
+3. **Column headers** — roving `tabindex` on `columnheader` cells
+4. **Body cells** — roving `tabindex` on focused `gridcell`
+
+| REQ-ID | Requirement | Priority |
+|--------|-------------|----------|
+| REQ-KB-58 | `Tab` into grid host MUST focus the first floating filter input when floating filters are visible | Must |
+| REQ-KB-59 | `Tab` from the last floating filter MUST focus the first column header | Must |
+| REQ-KB-67 | `Shift+Tab` from the first column header MUST focus the last floating filter input (when visible) | Must |
+| REQ-KB-68 | While focus is in a floating filter or filter popup control, grid `keydown` MUST NOT intercept typing or arrow keys | Must |
+| REQ-KB-69 | Clicking a floating filter input MUST focus that input (header click handler MUST NOT steal focus) | Must |
 
 ---
 

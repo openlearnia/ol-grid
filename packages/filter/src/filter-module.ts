@@ -3,6 +3,7 @@ import { resolveColId } from "@ol-grid/core";
 import {
   applyColumnFilters,
   createEmptyFilterModelForType,
+  filterModelsEqual,
   isColumnFilterActive,
 } from "./apply-column-filters.js";
 import type { ColumnFilterModel, FilterModel } from "./types.js";
@@ -38,6 +39,9 @@ export function createFilterController(ctx: GridContext) {
     source: "api" | "ui" | "floating" | "quickFilter" = "api",
   ): void {
     const next = normalizeFilterModel(model);
+    const current = getFilterModel();
+    if (filterModelsEqual(current, next)) return;
+
     const options = ctx.getOptions() as GridOptions;
     options.filterModel = next;
     ctx.getStore().dispatch({ type: "SET_FILTER_MODEL", filterModel: next });
@@ -134,7 +138,6 @@ export const FilterModule: GridModule = {
     if (Object.keys(initial).length > 0) {
       ctx.getStore().dispatch({ type: "SET_FILTER_MODEL", filterModel: initial });
     }
-    ctx.registerRowModelStage(createColumnFilterStage());
   },
   onGridDestroy(ctx) {
     ctx.getEngine().setFilterController(null);
@@ -144,6 +147,7 @@ export const FilterModule: GridModule = {
 export {
   applyColumnFilters,
   createEmptyFilterModelForType,
+  filterModelsEqual,
   isColumnFilterActive,
   isFilterModelActive,
 } from "./apply-column-filters.js";
