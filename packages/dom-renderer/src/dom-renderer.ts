@@ -665,8 +665,8 @@ export class DomRenderer implements RendererAdapter {
 
     const columns = this.engine.getNavigableColumns();
     if (columns.length === 0) return;
-    this.engine.setFocusedCell(0, columns[0]!.colId);
-    this.focusCurrentStoreCell();
+    this.engine.setFocusedHeader(columns[0]!.colId);
+    this.focusHeader(columns[0]!.colId);
   };
 
   private readonly handleSentinelBeforeFocus = (): void => {
@@ -839,13 +839,13 @@ export class DomRenderer implements RendererAdapter {
               this.engine.moveHeaderFocus(1);
               this.focusHeader(this.engine.getFocusedHeader()!);
             } else {
-              // last header → move to first body cell
+              // last header → restore prior body cell or first visible body cell
               const rowCount = this.engine.getRowModel().getRowCount();
               this.engine.setFocusedHeader(null);
               if (rowCount > 0) {
                 this.flushScrollFromDom();
                 this.keyboardNavFocusPending = true;
-                this.engine.tabNavigate(true);
+                this.engine.focusBodyFromHeader();
                 this.scheduleFocusAfterKeyboardNav();
               }
             }
@@ -966,13 +966,15 @@ export class DomRenderer implements RendererAdapter {
               this.exitGridTab("before");
             }
           } else {
-            if (isHostFocused && !focusedCell) {
-              event.preventDefault();
-              event.stopPropagation();
-              this.flushScrollFromDom();
-              this.keyboardNavFocusPending = true;
-              this.engine!.tabNavigate(true);
-              this.scheduleFocusAfterKeyboardNav();
+            if (isHostFocused && !focusedCell && !focusedHeaderColId) {
+              const headerCols = this.engine!.getNavigableColumns();
+              if (headerCols.length > 0) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.engine!.setFocusedHeader(headerCols[0]!.colId);
+                this.keyboardNavFocusPending = true;
+                this.scheduleFocusAfterKeyboardNav();
+              }
             } else if (focusedCell) {
               const columns = this.engine!.getNavigableColumns();
               const colIndex = columns.findIndex((c) => c.colId === focusedCell.colId);

@@ -64,12 +64,13 @@ Navigation MUST work identically across React, Vue, Angular, Svelte, vanilla, an
 | Home / End | **Not implemented** | |
 | Page Up / Page Down | **Not implemented** | |
 | Ctrl+Home / Ctrl+End | **Not implemented** | |
-| Tab / Shift+Tab between cells | **Not implemented** | |
+| Tab / Shift+Tab between cells | **Partial** | Header→body dual behavior implemented |
 | Space toggles row selection | **Not implemented** | |
 | Shift+arrow range extend | **Not implemented** | |
 | `navigateToNextCell` callback | **Not implemented** | |
 | `tabToNextCell` callback | **Not implemented** | |
 | Header arrow navigation | **Not implemented** | |
+| Tab from last header → body | **Implemented** | `focusBodyFromHeader`, `lastBodyFocusedCell` |
 | Header Enter / Alt+Enter sort | **Not implemented** | |
 | `suppressCellFocus` | **Not implemented** | |
 | Screen reader live announcements | **Not implemented** | |
@@ -170,8 +171,20 @@ Navigation MUST work identically across React, Vue, Angular, Svelte, vanilla, an
 | REQ-KB-52 | `tabToNextCell` callback MAY override default Tab target | Should |
 | REQ-KB-53 | `tabToNextHeader` / `tabToNextGridContainer` MAY customize header Tab exit | Could |
 | REQ-KB-54 | `enterNavigatesVertically` option MAY make Enter move down instead of edit | Could |
+| REQ-KB-55 | `Tab` from last header MUST focus the **first visible navigable body cell** (top viewport row, first navigable column) when no prior body focus exists for this header visit | Must |
+| REQ-KB-56 | `Tab` from last header MUST **restore the prior body cell** (row + colId) when the user moved to headers from a focused body cell; restored cell MUST scroll into view if off-screen | Must |
+| REQ-KB-57 | Header→body Tab priority: restore prior body cell when valid; otherwise first visible navigable body cell | Must |
 
-### 4.6 Header navigation (T2)
+### 4.5.1 Tab from last header → body (decision: both behaviors)
+
+When the user presses `Tab` on the **last column header**, focus enters the body rowgroup. ol-grid supports **two complementary behaviors** with explicit priority:
+
+1. **Restore context (preferred when available):** If the user had a body cell focused immediately before moving to headers, `Tab` restores that cell (`rowIndex` + `colId`), scrolling it into view when needed. The restored row is **not** reset to row 0 or an arbitrary visible row.
+2. **Fresh entry / scrolled viewport (fallback):** If there is no valid prior body cell for this header visit (e.g. Tab into grid via host → headers only, or header click without body focus), `Tab` focuses the **first visible navigable body cell** — the top row in the current viewport (`floor(scrollTop / rowHeight)`), first navigable column in tab order (selection/checkbox columns skipped per `getNavigableColumns`).
+
+**Priority:** valid `lastBodyFocusedCell` → restore; else → first visible navigable cell.
+
+---
 
 | REQ-ID | Requirement | Priority |
 |--------|-------------|----------|
@@ -180,6 +193,8 @@ Navigation MUST work identically across React, Vue, Angular, Svelte, vanilla, an
 | REQ-KB-62 | `Alt+Enter` MUST toggle sort without opening menu (AG Grid) | Could |
 | REQ-KB-63 | `Alt+Shift+Enter` MUST add multi-sort key (AG Grid) | Could |
 | REQ-KB-64 | Header focus MUST use `role="columnheader"` with `aria-sort` | Must |
+| REQ-KB-65 | Moving focus from body to header MUST snapshot the body cell for later restore (`lastBodyFocusedCell`) | Must |
+| REQ-KB-66 | Moving focus to header without an active body cell MUST clear the restore snapshot (fresh header entry) | Must |
 
 ### 4.7 Range keys (T3)
 
@@ -330,6 +345,9 @@ Reference: [AG Grid Keyboard Interaction](https://www.ag-grid.com/javascript-dat
 - [ ] `navigateToNextCell` can block right arrow at column boundary
 - [ ] Header Enter toggles sort; `aria-sort` updates
 - [ ] `aria-live` announces "3 rows selected" on selection change
+- [ ] **REQ-KB-55:** Tab from last header with scrolled viewport (no prior body focus) → first visible row, not row 0
+- [ ] **REQ-KB-56:** Tab from last header after body→header transition → restores prior body cell (row + colId), scrolls into view if needed
+- [ ] **REQ-KB-57:** Restore takes priority over first-visible when `lastBodyFocusedCell` is valid
 
 ### 9.3 Tier 3
 

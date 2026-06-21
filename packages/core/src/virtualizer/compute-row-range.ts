@@ -13,6 +13,11 @@ export interface RowVirtualRange {
   totalHeight: number;
 }
 
+export function getFirstVisibleRowIndex(scrollTop: number, rowHeight: number): number {
+  if (rowHeight <= 0) return 0;
+  return Math.max(0, Math.floor(scrollTop / rowHeight));
+}
+
 export function computeRowVirtualRange(input: RowVirtualRangeInput): RowVirtualRange {
   const { rowCount, rowHeight, scrollTop, viewportHeight } = input;
   const overscan = input.overscanRowCount ?? 5;
@@ -22,7 +27,7 @@ export function computeRowVirtualRange(input: RowVirtualRangeInput): RowVirtualR
     return { rowStart: 0, rowEnd: -1, rowOffset: 0, totalHeight: 0 };
   }
 
-  const firstVisible = Math.floor(scrollTop / rowHeight);
+  const firstVisible = getFirstVisibleRowIndex(scrollTop, rowHeight);
   const visibleCount = Math.ceil(viewportHeight / rowHeight) + 1;
   const rowStart = Math.max(0, firstVisible - overscan);
   const rowEnd = Math.min(rowCount - 1, firstVisible + visibleCount + overscan);

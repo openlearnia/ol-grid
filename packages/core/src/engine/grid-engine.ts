@@ -32,7 +32,10 @@ import type { GetRowIdParams, GridOptions, SortModel } from "../types/options.js
 import type { RenderFrame, RendererAdapter } from "../types/renderer.js";
 import type { RowNode } from "../types/row.js";
 import type { CellPosition, SelectionState } from "../types/state.js";
-import { computeRowVirtualRange } from "../virtualizer/compute-row-range.js";
+import {
+  computeRowVirtualRange,
+  getFirstVisibleRowIndex,
+} from "../virtualizer/compute-row-range.js";
 
 const DEFAULT_ROW_HEIGHT = 32;
 const OVERSCAN_ROW_COUNT = 5;
@@ -172,6 +175,7 @@ export class GridEngine<TData = unknown> {
   private sortController: SortControllerLike | null = null;
   private cellRendererRegistry = new Map<string, CellRendererFn<TData>>();
   private frameworkCellRenderers = new Set<string | CellRendererFn<TData>>();
+  private lastBodyFocusedCell: CellPosition | null = null;
 
   constructor(options: GridOptions<TData> = {}) {
     const gridId = options.gridId ?? `ol-grid-${++gridIdCounter}`;
@@ -585,11 +589,46 @@ export class GridEngine<TData = unknown> {
       if (!exists) return;
     }
     this.store.batch(() => {
+      if (colId !== null) {
+        const currentBodyCell = this.store.getState().focusedCell;
+        if (currentBodyCell) {
+          this.lastBodyFocusedCell = { ...currentBodyCell };
+        } else {
+          this.lastBodyFocusedCell = null;
+        }
+      }
       this.store.dispatch({ type: "SET_FOCUSED_HEADER", focusedHeaderColId: colId });
       if (colId !== null) {
         this.store.dispatch({ type: "SET_FOCUSED_CELL", focusedCell: null });
       }
     });
+  }
+
+  focusBodyFromHeader(): void {
+    const columns = this.getNavigableColumns();
+    if (columns.length === 0) return;
+
+    const rowCount = this.rowModel.getRowCount();
+    if (rowCount === 0) return;
+
+    if (this.lastBodyFocusedCell && this.isValidBodyCell(this.lastBodyFocusedCell)) {
+      this.setFocusedCell(
+        this.lastBodyFocusedCell.rowIndex,
+        this.lastBodyFocusedCell.colId,
+      );
+      return;
+    }
+
+    const state = this.store.getState();
+    const firstVisibleRow = getFirstVisibleRowIndex(state.scrollTop, this.rowHeight);
+    const rowIndex = Math.min(firstVisibleRow, rowCount - 1);
+    this.setFocusedCell(rowIndex, columns[0]!.colId);
+  }
+
+  private isValidBodyCell(cell: CellPosition): boolean {
+    const rowCount = this.rowModel.getRowCount();
+    if (cell.rowIndex < 0 || cell.rowIndex >= rowCount) return false;
+    return this.getNavigableColumns().some((col) => col.colId === cell.colId);
   }
 
   getFocusedHeader(): string | null {

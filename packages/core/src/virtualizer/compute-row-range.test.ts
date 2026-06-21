@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeRowVirtualRange } from "./compute-row-range.js";
+import { computeRowVirtualRange, getFirstVisibleRowIndex } from "./compute-row-range.js";
 
 describe("computeRowVirtualRange", () => {
   const base = {
@@ -17,6 +17,12 @@ describe("computeRowVirtualRange", () => {
       rowOffset: 0,
       totalHeight: 0,
     });
+  });
+
+  it("returns first visible row index from scroll position", () => {
+    expect(getFirstVisibleRowIndex(0, 32)).toBe(0);
+    expect(getFirstVisibleRowIndex(320, 32)).toBe(10);
+    expect(getFirstVisibleRowIndex(319, 32)).toBe(9);
   });
 
   it("computes initial visible range with overscan", () => {

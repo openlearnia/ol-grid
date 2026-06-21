@@ -376,7 +376,7 @@ describe("DomRenderer keyboard navigation", () => {
     expect(engine.getStore().getState().scrollTop).toBe(320);
   });
 
-  it("Enter after arrow-only navigation starts editing without a prior click", () => {
+  it("Enter after arrow-only navigation starts editing without a prior click", async () => {
     const rowData = [{ id: 1, name: "Alice", role: "Engineer" }];
 
     const engine = createGridEngine<Person>({
@@ -394,6 +394,14 @@ describe("DomRenderer keyboard navigation", () => {
     engine.getStore().dispatch({ type: "SET_VIEWPORT", width: 800, height: 400 });
 
     host.focus();
+    await flushMicrotasks();
+    // Tab through headers into the first body cell (id @ row 0).
+    for (let i = 0; i < 3; i++) {
+      host.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }),
+      );
+      await flushMicrotasks();
+    }
     host.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     host.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
@@ -743,7 +751,7 @@ describe("DomRenderer keyboard navigation", () => {
     }
   });
 
-  it("Tab from grid host keeps focus inside the grid (lands on a cell)", async () => {
+  it("Tab into grid via host focus lands on first header cell", async () => {
     const rowData = Array.from({ length: 5 }, (_, index) => ({
       id: index + 1,
       name: `User ${index + 1}`,
@@ -764,15 +772,49 @@ describe("DomRenderer keyboard navigation", () => {
     engine.getStore().dispatch({ type: "SET_VIEWPORT", width: 800, height: 200 });
 
     host.focus();
-    // host.focus() auto-seeds focusedCell to first cell via handleHostFocus
+    await flushMicrotasks();
+
+    expect(engine.getApi().getFocusedCell()).toBeNull();
+    expect(engine.getFocusedHeader()).toBe("id");
+    const focusedHeader = host.querySelector<HTMLElement>(".ol-grid__header-cell--focused");
+    expect(focusedHeader).not.toBeNull();
+    expect(focusedHeader?.dataset.colId).toBe("id");
+    expect(document.activeElement).toBe(focusedHeader);
+    expect(host.contains(document.activeElement)).toBe(true);
+  });
+
+  it("Tab from grid host keeps focus inside the grid (lands on next header)", async () => {
+    const rowData = Array.from({ length: 5 }, (_, index) => ({
+      id: index + 1,
+      name: `User ${index + 1}`,
+      role: "Engineer",
+    }));
+
+    const engine = createGridEngine<Person>({
+      getRowId: ({ data }) => String(data.id),
+      columnDefs: [
+        { field: "id", headerName: "ID", width: 72 },
+        { field: "name", headerName: "Name", width: 140 },
+      ],
+      rowData,
+    });
+
+    const renderer = createDomRenderer();
+    engine.mount(host, renderer);
+    engine.getStore().dispatch({ type: "SET_VIEWPORT", width: 800, height: 200 });
+
+    host.focus();
+    await flushMicrotasks();
     host.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }),
     );
     await flushMicrotasks();
 
-    // Tab moves from first cell to second cell; focus stays inside the grid
-    const focusedCell = host.querySelector<HTMLElement>(".ol-grid__cell--focused");
-    expect(focusedCell).not.toBeNull();
+    expect(engine.getApi().getFocusedCell()).toBeNull();
+    expect(engine.getFocusedHeader()).toBe("name");
+    const focusedHeader = host.querySelector<HTMLElement>(".ol-grid__header-cell--focused");
+    expect(focusedHeader).not.toBeNull();
+    expect(focusedHeader?.dataset.colId).toBe("name");
     expect(host.contains(document.activeElement)).toBe(true);
   });
 
@@ -966,6 +1008,95 @@ describe("DomRenderer keyboard navigation", () => {
     const focusedHeader = host.querySelector<HTMLElement>(".ol-grid__header-cell--focused");
     expect(focusedHeader?.dataset.colId).toBe("id");
     expect(document.activeElement).toBe(focusedHeader);
+  });
+
+  it("Tab from last header after scroll focuses top visible row, not row 0", async () => {
+    const rowData = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1,
+      name: `User ${index + 1}`,
+      role: "Engineer",
+    }));
+
+    const engine = createGridEngine<Person>({
+      getRowId: ({ data }) => String(data.id),
+      columnDefs: [
+        { field: "id", headerName: "ID", width: 72 },
+        { field: "name", headerName: "Name", width: 140 },
+      ],
+      rowData,
+    });
+
+    const renderer = createDomRenderer();
+    engine.mount(host, renderer);
+    engine.getStore().dispatch({ type: "SET_VIEWPORT", width: 800, height: 200 });
+    engine.getStore().dispatch({ type: "SET_SCROLL", scrollTop: 320, scrollLeft: 0 });
+
+    const nameHeader = host.querySelector<HTMLElement>(
+      '[data-col-id="name"][role="columnheader"]',
+    );
+    expect(nameHeader).not.toBeNull();
+    nameHeader!.click();
+    await flushMicrotasks();
+
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }),
+    );
+    await flushMicrotasks();
+
+    expect(engine.getFocusedHeader()).toBeNull();
+    expect(engine.getApi().getFocusedCell()).toEqual({ rowIndex: 10, colId: "id" });
+    const focusedCell = host.querySelector<HTMLElement>(".ol-grid__cell--focused");
+    expect(focusedCell?.dataset.colId).toBe("id");
+    expect(
+      (focusedCell?.closest(".ol-grid__row") as HTMLElement | null)?.dataset.rowIndex,
+    ).toBe("10");
+    expect(document.activeElement).toBe(focusedCell);
+  });
+
+  it("Tab from last header restores prior body cell when returning from headers", async () => {
+    const rowData = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1,
+      name: `User ${index + 1}`,
+      role: "Engineer",
+    }));
+
+    const engine = createGridEngine<Person>({
+      getRowId: ({ data }) => String(data.id),
+      columnDefs: [
+        { field: "id", headerName: "ID", width: 72 },
+        { field: "name", headerName: "Name", width: 140 },
+      ],
+      rowData,
+    });
+
+    const renderer = createDomRenderer();
+    engine.mount(host, renderer);
+    engine.getStore().dispatch({ type: "SET_VIEWPORT", width: 800, height: 200 });
+    engine.getApi().setFocusedCell(50, "name");
+
+    const nameHeader = host.querySelector<HTMLElement>(
+      '[data-col-id="name"][role="columnheader"]',
+    );
+    expect(nameHeader).not.toBeNull();
+    nameHeader!.click();
+    await flushMicrotasks();
+
+    expect(engine.getFocusedHeader()).toBe("name");
+    expect(engine.getApi().getFocusedCell()).toBeNull();
+
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }),
+    );
+    await flushMicrotasks();
+
+    expect(engine.getFocusedHeader()).toBeNull();
+    expect(engine.getApi().getFocusedCell()).toEqual({ rowIndex: 50, colId: "name" });
+    const focusedCell = host.querySelector<HTMLElement>(".ol-grid__cell--focused");
+    expect(focusedCell?.dataset.colId).toBe("name");
+    expect(
+      (focusedCell?.closest(".ol-grid__row") as HTMLElement | null)?.dataset.rowIndex,
+    ).toBe("50");
+    expect(document.activeElement).toBe(focusedCell);
   });
 
   it("Tab from last header after click moves to first body cell", async () => {
