@@ -34,17 +34,83 @@ import type { RowNode } from "../types/row.js";
 import type { CellPosition, SelectionState } from "../types/state.js";
 import {
   computeRowVirtualRange,
+  computeDirectionalOverscan,
+  type ScrollOverscanState,
   getFirstVisibleRowIndex,
+  type RowVirtualRange,
 } from "../virtualizer/compute-row-range.js";
 
 const DEFAULT_ROW_HEIGHT = 32;
-const OVERSCAN_ROW_COUNT = 5;
 
 interface SortControllerLike {
   toggleColumnSort(colId: string): void;
   getSortModel(): SortModel;
   setSortModel(model: SortModel, source?: "api" | "uiColumnSorted"): void;
   rebuildFromColumns(columns: ColumnState[]): void;
+}
+
+interface FilterControllerLike {
+  getFilterModel(): Record<string, unknown>;
+  setFilterModel(
+    model: Record<string, unknown> | null,
+    source?: "api" | "ui" | "floating" | "quickFilter",
+  ): void;
+  destroyFilter(colKey: string): void;
+  setColumnFilter(
+    colId: string,
+    model: unknown,
+    source?: "api" | "ui" | "floating",
+  ): void;
+  openFilter(colId: string): void;
+  closeFilter(): void;
+  getFilterTypeForColumn(colId: string): "text" | "number" | "date" | null;
+  getDefaultModelForColumn(colId: string): unknown;
+  hasFloatingFilters(): boolean;
+  isColumnFilterActiveForCol(colId: string): boolean;
+}
+
+function resolveFilterType<TData>(
+  colDef: ColumnDef<TData>,
+): "text" | "number" | "date" | null {
+  const filter = colDef.filter;
+  if (filter === "number" || filter === "date" || filter === "text") {
+    return filter;
+  }
+  if (filter === true || colDef.filterable === true) {
+    return "text";
+  }
+  return null;
+}
+
+function resolveFloatingFilter<TData>(
+  colDef: ColumnDef<TData>,
+  defaultColDef?: Partial<ColumnDef<TData>>,
+): boolean {
+  if (colDef.floatingFilter === false) return false;
+  if (colDef.floatingFilter === true) return resolveFilterType(colDef) !== null;
+  if (defaultColDef?.floatingFilter === true) return resolveFilterType(colDef) !== null;
+  return false;
+}
+
+function isFilterModelEntryActive(model: unknown): boolean {
+  if (!model || typeof model !== "object") return false;
+  const entry = model as Record<string, unknown>;
+  if (entry.filterType === "text") {
+    return String(entry.filter ?? "").trim().length > 0;
+  }
+  if (entry.filterType === "number") {
+    if (entry.type === "inRange") {
+      return entry.filter != null || entry.filterTo != null;
+    }
+    return entry.filter != null;
+  }
+  if (entry.filterType === "date") {
+    if (entry.type === "inRange") {
+      return !!entry.dateFrom || !!entry.dateTo;
+    }
+    return !!entry.dateFrom;
+  }
+  return false;
 }
 
 function readSortModel(columns: ColumnState[]): SortModel {
@@ -122,6 +188,15 @@ function createGridApi<TData>(
     setQuickFilterText(text) {
       engine.setQuickFilterText(text);
     },
+    setFilterModel(model) {
+      engine.setFilterModel(model);
+    },
+    getFilterModel() {
+      return engine.getFilterModel();
+    },
+    destroyFilter(colKey) {
+      engine.destroyFilter(colKey);
+    },
     startEditingCell(params) {
       engine.startEditingCell(params.rowIndex, params.colKey);
     },
@@ -143,7 +218,13 @@ function createGridApi<TData>(
   };
 }
 
-function toRenderColumn<TData>(column: NormalizedColumn<TData>): RenderFrame["columns"][number] {
+function toRenderColumn<TData>(
+  column: NormalizedColumn<TData>,
+  filterModel: Record<string, unknown>,
+  defaultColDef?: Partial<ColumnDef<TData>>,
+): RenderFrame["columns"][number] {
+  const merged = defaultColDef ? { ...defaultColDef, ...column.def } : column.def;
+  const filterType = resolveFilterType(merged);
   return {
     colId: column.colId,
     headerName: column.isSelectionColumn ? "" : (column.def.headerName ?? column.colId),
@@ -153,6 +234,9 @@ function toRenderColumn<TData>(column: NormalizedColumn<TData>): RenderFrame["co
     sortable: column.isSelectionColumn ? false : column.def.sortable !== false,
     pinned: column.pinned,
     isSelectionColumn: column.isSelectionColumn,
+    filterType,
+    filterActive: filterType ? isFilterModelEntryActive(filterModel[column.colId]) : false,
+    floatingFilter: resolveFloatingFilter(merged, defaultColDef),
   };
 }
 
@@ -173,9 +257,15 @@ export class GridEngine<TData = unknown> {
   private moduleContexts: import("../modules/grid-context.js").GridContext[] = [];
   private rowModelStages: RowModelStage[] = [];
   private sortController: SortControllerLike | null = null;
+  private filterController: FilterControllerLike | null = null;
   private cellRendererRegistry = new Map<string, CellRendererFn<TData>>();
   private frameworkCellRenderers = new Set<string | CellRendererFn<TData>>();
   private lastBodyFocusedCell: CellPosition | null = null;
+  private scrollOverscanState: ScrollOverscanState = {
+    scrollTop: 0,
+    lastMovementTime: 0,
+    direction: "none",
+  };
 
   constructor(options: GridOptions<TData> = {}) {
     const gridId = options.gridId ?? `ol-grid-${++gridIdCounter}`;
@@ -190,10 +280,12 @@ export class GridEngine<TData = unknown> {
       columns = applyInitialSortModel(columns, options.sortModel);
     }
     const quickFilterText = options.quickFilterText ?? "";
+    const filterModel = options.filterModel ?? {};
 
     this.rowModel.setGetRowId(options.getRowId);
     this.rowModel.setRowData(rowData);
     this.rowModel.setQuickFilterText(quickFilterText);
+    this.rowModel.setFilterModel(filterModel);
     this.columnModel.setColumnDefs(mergedColumnDefs);
     this.columnModel.setColumnState(columns);
     this.syncSelectionColumn();
@@ -206,6 +298,7 @@ export class GridEngine<TData = unknown> {
 
     this.store.batch(() => {
       this.store.dispatch({ type: "SET_QUICK_FILTER", quickFilterText });
+      this.store.dispatch({ type: "SET_FILTER_MODEL", filterModel });
       this.store.dispatch({ type: "SET_ROW_COUNT", rowCount: 0 });
       this.store.dispatch({ type: "SET_COLUMNS", columns });
       if (selection) {
@@ -260,10 +353,17 @@ export class GridEngine<TData = unknown> {
     this.sortController = controller;
   }
 
+  setFilterController(controller: FilterControllerLike | null): void {
+    this.filterController = controller;
+  }
+
   rebuildRowModel(columns = this.store.getState().columns): void {
     const sortModel = readSortModel(columns);
+    const filterModel = this.getFilterModel();
+    this.rowModel.setFilterModel(filterModel);
     this.rowModel.rebuild(
       sortModel,
+      filterModel,
       this.getMergedColumnDefs(),
       this.api,
       this.options.context ?? null,
@@ -314,11 +414,56 @@ export class GridEngine<TData = unknown> {
     this.moduleContexts = [];
     this.activeModules = [];
     this.sortController = null;
+    this.filterController = null;
   }
 
 
   getRowHeight(): number {
     return this.rowHeight;
+  }
+
+  /** Same virtual range math as refresh(), for renderer scroll fast-path. */
+  computeVirtualRangeForScrollTop(
+    scrollTop?: number,
+    overscanOverride?: { overscanBefore?: number; overscanAfter?: number },
+  ): RowVirtualRange {
+    const state = this.store.getState();
+    const top = scrollTop ?? state.scrollTop;
+    const directional = overscanOverride ?? this.resolveDirectionalOverscan(top);
+    return computeRowVirtualRange({
+      rowCount: this.rowModel.getRowCount(),
+      rowHeight: this.rowHeight,
+      scrollTop: top,
+      viewportHeight: state.viewportHeight,
+      overscanBefore: directional.overscanBefore,
+      overscanAfter: directional.overscanAfter,
+    });
+  }
+
+  /**
+   * Pre-mount rows for an expanded virtual range at the current scroll position.
+   * Used before scrollTop changes (wheel / scrollbar mousedown) to keep the pool warm.
+   */
+  warmSyncRowsAtScrollTop(
+    scrollTop: number,
+    overscan?: { overscanBefore: number; overscanAfter: number },
+  ): void {
+    if (!this.renderer || this.destroyed) return;
+
+    const state = this.store.getState();
+    const directional = overscan ?? this.resolveDirectionalOverscan(scrollTop);
+    const virtualRange = computeRowVirtualRange({
+      rowCount: this.rowModel.getRowCount(),
+      rowHeight: this.rowHeight,
+      scrollTop,
+      viewportHeight: state.viewportHeight,
+      overscanBefore: directional.overscanBefore,
+      overscanAfter: directional.overscanAfter,
+    });
+
+    const frame = this.buildRenderFrame(state, virtualRange);
+    this.lastFrame = frame;
+    this.renderer.renderFrame(frame);
   }
 
   getLastFrame(): RenderFrame | null {
@@ -410,7 +555,77 @@ export class GridEngine<TData = unknown> {
 
     if (key === "quickFilterText" && typeof value === "string") {
       this.setQuickFilterText(value);
+      return;
     }
+
+    if (key === "filterModel" && value && typeof value === "object") {
+      this.setFilterModel(value as Record<string, unknown>);
+    }
+  }
+
+  setFilterModel(model: Record<string, unknown> | null): void {
+    if (this.filterController) {
+      this.filterController.setFilterModel(model, "api");
+      return;
+    }
+    const next = model ? { ...model } : {};
+    this.options.filterModel = next;
+    this.store.dispatch({ type: "SET_FILTER_MODEL", filterModel: next });
+    this.rebuildRowModel();
+    this.options.onFilterChanged?.({ api: this.api, source: "api" });
+  }
+
+  getFilterModel(): Record<string, unknown> {
+    return this.filterController?.getFilterModel() ?? this.store.getState().filterModel;
+  }
+
+  destroyFilter(colKey: string): void {
+    if (this.filterController) {
+      this.filterController.destroyFilter(colKey);
+      return;
+    }
+    const next = { ...this.getFilterModel() };
+    delete next[colKey];
+    this.setFilterModel(next);
+  }
+
+  openColumnFilter(colId: string): void {
+    if (this.filterController) {
+      this.filterController.openFilter(colId);
+      return;
+    }
+    this.store.dispatch({ type: "SET_OPEN_FILTER", openFilterColId: colId });
+  }
+
+  closeColumnFilter(): void {
+    if (this.filterController) {
+      this.filterController.closeFilter();
+      return;
+    }
+    this.store.dispatch({ type: "SET_OPEN_FILTER", openFilterColId: null });
+  }
+
+  applyColumnFilterFromUi(
+    colId: string,
+    model: unknown,
+    source: "ui" | "floating" = "ui",
+  ): void {
+    if (this.filterController) {
+      this.filterController.setColumnFilter(colId, model, source);
+      return;
+    }
+  }
+
+  getColumnFilterType(colId: string): "text" | "number" | "date" | null {
+    return this.filterController?.getFilterTypeForColumn(colId) ?? null;
+  }
+
+  getDefaultColumnFilterModel(colId: string): unknown {
+    return this.filterController?.getDefaultModelForColumn(colId) ?? null;
+  }
+
+  hasFloatingFilters(): boolean {
+    return this.filterController?.hasFloatingFilters() ?? false;
   }
 
   setQuickFilterText(text: string): void {
@@ -1026,6 +1241,27 @@ export class GridEngine<TData = unknown> {
     });
   }
 
+  private resolveDirectionalOverscan(scrollTop: number): {
+    overscanBefore: number;
+    overscanAfter: number;
+  } {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const prevTime = this.scrollOverscanState.lastMovementTime;
+    const deltaMs = prevTime > 0 ? now - prevTime : undefined;
+    const result = computeDirectionalOverscan(
+      scrollTop,
+      this.scrollOverscanState,
+      now,
+      this.rowHeight,
+      deltaMs,
+    );
+    this.scrollOverscanState = result.nextState;
+    return {
+      overscanBefore: result.overscanBefore,
+      overscanAfter: result.overscanAfter,
+    };
+  }
+
   private refresh(): void {
     if (!this.renderer || this.destroyed) return;
 
@@ -1034,22 +1270,56 @@ export class GridEngine<TData = unknown> {
     this.columnModel.setColumnState(state.columns);
     this.syncSelectionColumn();
 
+    const directional = this.resolveDirectionalOverscan(state.scrollTop);
     const virtualRange = computeRowVirtualRange({
       rowCount: this.rowModel.getRowCount(),
       rowHeight: this.rowHeight,
       scrollTop: state.scrollTop,
       viewportHeight: state.viewportHeight,
-      overscanRowCount: OVERSCAN_ROW_COUNT,
+      overscanBefore: directional.overscanBefore,
+      overscanAfter: directional.overscanAfter,
     });
 
-    const pinnedLeftColumns = this.columnModel.getPinnedLeftColumns().map(toRenderColumn);
-    const centerColumns = this.columnModel.getCenterColumns().map(toRenderColumn);
-    const pinnedRightColumns = this.columnModel.getPinnedRightColumns().map(toRenderColumn);
-    const columns = [...pinnedLeftColumns, ...centerColumns, ...pinnedRightColumns];
+    const frame = this.buildRenderFrame(state, virtualRange);
 
-    const selectedRowIds = state.selection
-      ? [...state.selection.selectedRowIds]
-      : [];
+    const rangeChanged =
+      !this.lastFrame ||
+      this.lastFrame.virtualRange.rowStart !== frame.virtualRange.rowStart ||
+      this.lastFrame.virtualRange.rowEnd !== frame.virtualRange.rowEnd ||
+      this.lastFrame.rowOffset !== frame.rowOffset ||
+      this.lastFrame.totalHeight !== frame.totalHeight ||
+      this.lastFrame.totalWidth !== frame.totalWidth ||
+      this.lastFrame.renderWidth !== frame.renderWidth;
+
+    this.lastFrame = frame;
+    this.renderer.renderFrame(frame);
+
+    if (rangeChanged) {
+      this.eventBus.emit("viewportChanged", frame.virtualRange);
+    }
+  }
+
+  private buildRenderFrame(
+    state: ReturnType<GridStore["getState"]>,
+    virtualRange: RowVirtualRange,
+  ): RenderFrame {
+    const filterModel = state.filterModel;
+    const defaultColDef = this.options.defaultColDef;
+    const pinnedLeftColumns = this.columnModel
+      .getPinnedLeftColumns()
+      .map((column) => toRenderColumn(column, filterModel, defaultColDef));
+    const centerColumns = this.columnModel
+      .getCenterColumns()
+      .map((column) => toRenderColumn(column, filterModel, defaultColDef));
+    const pinnedRightColumns = this.columnModel
+      .getPinnedRightColumns()
+      .map((column) => toRenderColumn(column, filterModel, defaultColDef));
+    const columns = [...pinnedLeftColumns, ...centerColumns, ...pinnedRightColumns];
+    const showFloatingFilters =
+      this.filterController?.hasFloatingFilters() ??
+      columns.some((column) => column.floatingFilter);
+
+    const selectedRowIds = state.selection ? [...state.selection.selectedRowIds] : [];
 
     const displayedRowIds = this.getDisplayedRowIds();
     const headerCheckboxState =
@@ -1066,7 +1336,7 @@ export class GridEngine<TData = unknown> {
       }
     }
 
-    const frame: RenderFrame = {
+    return {
       virtualRange: {
         rowStart: virtualRange.rowStart,
         rowEnd: virtualRange.rowEnd,
@@ -1092,23 +1362,10 @@ export class GridEngine<TData = unknown> {
       focusedCell: state.focusedCell,
       focusedHeaderColId: state.focusedHeaderColId ?? null,
       editing: state.editing,
+      filterModel,
+      openFilterColId: state.openFilterColId,
+      showFloatingFilters,
     };
-
-    const rangeChanged =
-      !this.lastFrame ||
-      this.lastFrame.virtualRange.rowStart !== frame.virtualRange.rowStart ||
-      this.lastFrame.virtualRange.rowEnd !== frame.virtualRange.rowEnd ||
-      this.lastFrame.rowOffset !== frame.rowOffset ||
-      this.lastFrame.totalHeight !== frame.totalHeight ||
-      this.lastFrame.totalWidth !== frame.totalWidth ||
-      this.lastFrame.renderWidth !== frame.renderWidth;
-
-    this.lastFrame = frame;
-    this.renderer.renderFrame(frame);
-
-    if (rangeChanged) {
-      this.eventBus.emit("viewportChanged", frame.virtualRange);
-    }
   }
 
   private buildRenderRow(

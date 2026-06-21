@@ -14,6 +14,9 @@ export interface RenderColumn {
   sortable: boolean;
   pinned: "left" | "right" | null;
   isSelectionColumn?: boolean;
+  filterType?: "text" | "number" | "date" | null;
+  filterActive?: boolean;
+  floatingFilter?: boolean;
 }
 
 import type { CellRendererFn } from "./cell-renderer.js";
@@ -65,6 +68,9 @@ export interface RenderFrame {
   focusedCell: CellPosition | null;
   focusedHeaderColId: string | null;
   editing: { activeCell: CellPosition; editValue: string } | null;
+  filterModel: Record<string, unknown>;
+  openFilterColId: string | null;
+  showFloatingFilters: boolean;
 }
 
 export interface RendererAdapter {

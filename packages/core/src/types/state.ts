@@ -37,6 +37,8 @@ export interface GridState {
   focusedHeaderColId: string | null;
   editing: EditingState | null;
   quickFilterText: string;
+  filterModel: Record<string, unknown>;
+  openFilterColId: string | null;
   rowModelType: RowModelType;
   rowModelMeta: RowModelMeta;
 }

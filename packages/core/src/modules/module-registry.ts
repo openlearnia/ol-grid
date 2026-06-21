@@ -14,6 +14,7 @@ export interface RowModelStageContext {
   api: unknown;
   context: unknown;
   sortModel: Array<{ colId: string; sort: "asc" | "desc" }>;
+  filterModel: Record<string, unknown>;
 }
 
 export interface GridModule {

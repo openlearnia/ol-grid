@@ -6,6 +6,7 @@ import {
   type GridOptions,
 } from "@ol-grid/core";
 import { SortModule } from "@ol-grid/sort";
+import { FilterModule } from "@ol-grid/filter";
 import { createDomRenderer } from "@ol-grid/dom-renderer";
 import {
   forwardRef,
@@ -18,11 +19,18 @@ import {
 import { useCellRendererPortals } from "./cell-renderer-portals.js";
 
 let sortModuleRegistered = false;
+let filterModuleRegistered = false;
 
 function ensureSortModuleRegistered(): void {
   if (sortModuleRegistered) return;
   ModuleRegistry.register(SortModule);
   sortModuleRegistered = true;
+}
+
+function ensureFilterModuleRegistered(): void {
+  if (filterModuleRegistered) return;
+  ModuleRegistry.register(FilterModule);
+  filterModuleRegistered = true;
 }
 
 export interface OlGridHandle<TData = unknown> {
@@ -49,6 +57,7 @@ const GRID_OPTION_KEYS = [
   "context",
   "quickFilterText",
   "sortModel",
+  "filterModel",
   "defaultColDef",
 ] as const satisfies readonly (keyof GridOptions<unknown>)[];
 
@@ -70,10 +79,11 @@ function syncGridOptions<TData>(
 
 function createEngine<TData>(options: GridOptions<TData>): GridEngine<TData> {
   ensureSortModuleRegistered();
+  ensureFilterModuleRegistered();
   return createGridEngine({
     ...options,
     frameworkCellRenderers: true,
-    modules: [...(options.modules ?? []), SortModule],
+    modules: [...(options.modules ?? []), SortModule, FilterModule],
   });
 }
 

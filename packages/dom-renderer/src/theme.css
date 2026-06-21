@@ -5,6 +5,7 @@
   --ol-grid-header-height: 32px;
   --ol-grid-border-color: #e2e8f0;
   --ol-grid-header-bg: #f8fafc;
+  --ol-grid-body-bg: #fff;
   --ol-grid-row-hover-bg: #f1f5f9;
   --ol-grid-row-selected-bg: #dbeafe;
   --ol-grid-cell-padding: 0 12px;
@@ -48,9 +49,123 @@
 .ol-grid__header {
   flex: 0 0 auto;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
   border-bottom: 1px solid var(--ol-grid-border-color);
   background: var(--ol-grid-header-bg);
+}
+
+.ol-grid__header-main {
+  display: flex;
+  overflow: hidden;
+}
+
+.ol-grid__filter-button {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--ol-grid-muted-color);
+  cursor: pointer;
+  padding: 0 0.15rem;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.ol-grid__filter-button--active {
+  color: #2563eb;
+}
+
+.ol-grid__filter-button:hover {
+  color: #1d4ed8;
+}
+
+.ol-grid__filter-popup {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--ol-grid-border-color);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.ol-grid__filter-popup-title {
+  font-weight: 600;
+}
+
+.ol-grid__filter-popup-operator,
+.ol-grid__filter-popup-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--ol-grid-border-color);
+  border-radius: 4px;
+}
+
+.ol-grid__filter-popup-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.ol-grid__filter-popup-clear {
+  font: inherit;
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+  border: 1px solid var(--ol-grid-border-color);
+  background: #fff;
+  cursor: pointer;
+}
+
+.ol-grid--floating-filters {
+  --ol-grid-floating-filter-height: 28px;
+}
+
+.ol-grid__floating-filters {
+  display: flex;
+  border-top: 1px solid var(--ol-grid-border-color);
+  background: var(--ol-grid-header-bg);
+}
+
+.ol-grid__floating-filters-pinned-left,
+.ol-grid__floating-filters-pinned-right {
+  flex: 0 0 auto;
+  display: flex;
+  height: var(--ol-grid-floating-filter-height);
+}
+
+.ol-grid__floating-filters-center {
+  flex: 0 0 auto;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.ol-grid__floating-filter-row {
+  display: flex;
+  height: var(--ol-grid-floating-filter-height);
+  will-change: transform;
+}
+
+.ol-grid__floating-filter-host {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  border-right: 1px solid var(--ol-grid-border-color);
+  box-sizing: border-box;
+}
+
+.ol-grid__floating-filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--ol-grid-border-color);
+  border-radius: 4px;
 }
 
 .ol-grid__header-pinned-left {
@@ -152,6 +267,7 @@
   overflow-y: auto;
   min-height: 0;
   position: relative;
+  background: var(--ol-grid-body-bg);
 }
 
 .ol-grid__body-inner {
@@ -187,6 +303,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   position: relative;
+  background: var(--ol-grid-body-bg);
 }
 
 .ol-grid__layout-spacer {
@@ -197,6 +314,7 @@
 .ol-grid__center-inner {
   position: relative;
   min-height: 100%;
+  background: var(--ol-grid-body-bg);
 }
 
 .ol-grid__rows {
@@ -228,7 +346,7 @@
   box-sizing: border-box;
 }
 
-.ol-grid__row:hover {
+.ol-grid__row--hover {
   background: var(--ol-grid-row-hover-bg);
 }
 
@@ -236,7 +354,7 @@
   background: var(--ol-grid-row-selected-bg);
 }
 
-.ol-grid__row--selected:hover {
+.ol-grid__row--selected.ol-grid__row--hover {
   background: #cfe3fc;
 }
 

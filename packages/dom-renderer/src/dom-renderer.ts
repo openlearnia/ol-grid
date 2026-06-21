@@ -7,7 +7,7 @@ import type {
   RenderFrame,
   RendererAdapter,
 } from "@ol-grid/core";
-import { getCellValue } from "@ol-grid/core";
+import { getCellValue, overscanForScrollIntent } from "@ol-grid/core";
 import themeCss from "./theme.css";
 import { renderCellContent } from "./cell-renderer.js";
 import {
@@ -16,6 +16,14 @@ import {
   resolveCellEditorType,
   type ProvidedCellEditorType,
 } from "./cell-editors.js";
+import { RowPool, reconcileRowOrder } from "./row-pool.js";
+import { shouldSyncScrollBeforePaint } from "./scroll-render.js";
+import {
+  createFilterButton,
+  createFloatingFilterInput,
+  mountFilterPopup,
+  type FilterModelEntry,
+} from "./filter-ui.js";
 
 const THEME_STYLE_ID = "ol-grid-dom-theme";
 const KEYBOARD_LOG_PREFIX = "[ol-grid:keyboard]";
@@ -90,6 +98,13 @@ export class DomRenderer implements RendererAdapter {
   private headerPinnedRight: HTMLElement | null = null;
   private headerSpacer: HTMLElement | null = null;
   private headerCenterRow: HTMLElement | null = null;
+  private headerMain: HTMLElement | null = null;
+  private floatingFilters: HTMLElement | null = null;
+  private floatingPinnedLeft: HTMLElement | null = null;
+  private floatingCenter: HTMLElement | null = null;
+  private floatingCenterRow: HTMLElement | null = null;
+  private floatingPinnedRight: HTMLElement | null = null;
+  private filterPopupCleanup: (() => void) | null = null;
   private body: HTMLElement | null = null;
   private bodyInner: HTMLElement | null = null;
   private bodyPinnedLeft: HTMLElement | null = null;
@@ -112,6 +127,29 @@ export class DomRenderer implements RendererAdapter {
     startX: number;
     startWidth: number;
   } | null = null;
+  private scrollLoopRafId: number | null = null;
+  private scrollWatcherActive = false;
+  /** Last body scrollTop observed — detects native scrollbar drag before store catches up. */
+  private lastKnownDomScrollTop = 0;
+  /** Last center scrollLeft observed — same for horizontal scrollbar drag. */
+  private lastKnownDomScrollLeft = 0;
+  /** px/ms from the latest vertical scroll event — drives sync-scroll decisions. */
+  private scrollVelocityPxMs = 0;
+  private lastVelocityScrollTop = 0;
+  private lastVelocityTime = 0;
+  /** True while the user is dragging the native vertical scrollbar. */
+  private scrollbarDragging = false;
+  /** True from pointerdown on scrollbar gutter until pointerup. */
+  private nativeScrollbarActive = false;
+  /** True for the scroll event(s) immediately following a wheel on body. */
+  private wheelScrollPending = false;
+  /** Nested depth for programmatic body.scrollTop writes (store / sync scroll). */
+  private programmaticScrollDepth = 0;
+  /** Prevents syncViewportScrollFromStore from fighting render-then-scroll. */
+  private scrollCommitInProgress = false;
+  /** Row index hovered across pinned-left, center, and pinned-right panels. */
+  private hoveredRowIndex: number | null = null;
+  private readonly rowPool = new RowPool();
 
   mount(host: HTMLElement, engine: GridEngine): void {
     ensureThemeStyles();
@@ -140,6 +178,9 @@ export class DomRenderer implements RendererAdapter {
     header.className = "ol-grid__header";
     header.setAttribute("role", "rowgroup");
 
+    const headerMain = document.createElement("div");
+    headerMain.className = "ol-grid__header-main";
+
     const headerPinnedLeft = document.createElement("div");
     headerPinnedLeft.className = "ol-grid__header-pinned-left";
     headerPinnedLeft.setAttribute("role", "row");
@@ -160,10 +201,43 @@ export class DomRenderer implements RendererAdapter {
     headerSpacer.className = "ol-grid__layout-spacer";
     headerSpacer.setAttribute("aria-hidden", "true");
 
-    header.appendChild(headerPinnedLeft);
-    header.appendChild(headerCenter);
-    header.appendChild(headerPinnedRight);
-    header.appendChild(headerSpacer);
+    headerMain.appendChild(headerPinnedLeft);
+    headerMain.appendChild(headerCenter);
+    headerMain.appendChild(headerPinnedRight);
+    headerMain.appendChild(headerSpacer);
+
+    const floatingFilters = document.createElement("div");
+    floatingFilters.className = "ol-grid__floating-filters";
+    floatingFilters.hidden = true;
+
+    const floatingPinnedLeft = document.createElement("div");
+    floatingPinnedLeft.className = "ol-grid__floating-filters-pinned-left";
+    floatingPinnedLeft.setAttribute("role", "row");
+
+    const floatingCenter = document.createElement("div");
+    floatingCenter.className = "ol-grid__floating-filters-center";
+
+    const floatingCenterRow = document.createElement("div");
+    floatingCenterRow.className =
+      "ol-grid__floating-filter-row ol-grid__floating-filter-row--center";
+    floatingCenterRow.setAttribute("role", "row");
+    floatingCenter.appendChild(floatingCenterRow);
+
+    const floatingPinnedRight = document.createElement("div");
+    floatingPinnedRight.className = "ol-grid__floating-filters-pinned-right";
+    floatingPinnedRight.setAttribute("role", "row");
+
+    const floatingSpacer = document.createElement("div");
+    floatingSpacer.className = "ol-grid__layout-spacer";
+    floatingSpacer.setAttribute("aria-hidden", "true");
+
+    floatingFilters.appendChild(floatingPinnedLeft);
+    floatingFilters.appendChild(floatingCenter);
+    floatingFilters.appendChild(floatingPinnedRight);
+    floatingFilters.appendChild(floatingSpacer);
+
+    header.appendChild(headerMain);
+    header.appendChild(floatingFilters);
 
     const body = document.createElement("div");
     body.className = "ol-grid__body";
@@ -220,11 +294,17 @@ export class DomRenderer implements RendererAdapter {
     this.sentinelBefore = sentinelBefore;
     this.sentinelAfter = sentinelAfter;
     this.header = header;
+    this.headerMain = headerMain;
     this.headerPinnedLeft = headerPinnedLeft;
     this.headerCenter = headerCenter;
     this.headerPinnedRight = headerPinnedRight;
     this.headerSpacer = headerSpacer;
     this.headerCenterRow = headerCenterRow;
+    this.floatingFilters = floatingFilters;
+    this.floatingPinnedLeft = floatingPinnedLeft;
+    this.floatingCenter = floatingCenter;
+    this.floatingCenterRow = floatingCenterRow;
+    this.floatingPinnedRight = floatingPinnedRight;
     this.body = body;
     this.bodyInner = bodyInner;
     this.bodyPinnedLeft = bodyPinnedLeft;
@@ -237,12 +317,16 @@ export class DomRenderer implements RendererAdapter {
     this.rowsPinnedRight = rowsPinnedRight;
 
     body.addEventListener("scroll", this.handleScroll, { passive: true });
+    body.addEventListener("wheel", this.handleBodyWheel, { passive: true });
+    body.addEventListener("pointerdown", this.handleBodyPointerDown);
     centerScroll.addEventListener("scroll", this.handleCenterScroll, { passive: true });
     header.addEventListener("click", this.handleHeaderClick);
     header.addEventListener("mousedown", this.handleHeaderMouseDown);
     header.addEventListener("dblclick", this.handleHeaderDblClick);
     bodyInner.addEventListener("click", this.handleRowClick);
     bodyInner.addEventListener("dblclick", this.handleCellDblClick);
+    bodyInner.addEventListener("mouseover", this.handleBodyMouseOver);
+    bodyInner.addEventListener("mouseleave", this.handleBodyMouseLeave);
       host.addEventListener("focus", this.handleHostFocus);
     sentinelBefore.addEventListener("focus", this.handleSentinelBeforeFocus);
     sentinelAfter.addEventListener("focus", this.handleSentinelAfterFocus);
@@ -253,24 +337,49 @@ export class DomRenderer implements RendererAdapter {
     this.resizeObserver.observe(body);
 
     this.reportViewportSize();
+    this.startScrollWatcher();
   }
 
   unmount(): void {
     this.cleanupResizeListeners();
     this.removeActiveEditor();
     this.body?.removeEventListener("scroll", this.handleScroll);
+    this.body?.removeEventListener("wheel", this.handleBodyWheel);
+    this.body?.removeEventListener("pointerdown", this.handleBodyPointerDown);
     this.centerScroll?.removeEventListener("scroll", this.handleCenterScroll);
+    this.closeFilterPopup();
     this.header?.removeEventListener("click", this.handleHeaderClick);
     this.header?.removeEventListener("mousedown", this.handleHeaderMouseDown);
     this.header?.removeEventListener("dblclick", this.handleHeaderDblClick);
     this.bodyInner?.removeEventListener("click", this.handleRowClick);
     this.bodyInner?.removeEventListener("dblclick", this.handleCellDblClick);
+    this.bodyInner?.removeEventListener("mouseover", this.handleBodyMouseOver);
+    this.bodyInner?.removeEventListener("mouseleave", this.handleBodyMouseLeave);
     this.host?.removeEventListener("focus", this.handleHostFocus);
     this.sentinelBefore?.removeEventListener("focus", this.handleSentinelBeforeFocus);
     this.sentinelAfter?.removeEventListener("focus", this.handleSentinelAfterFocus);
     document.removeEventListener("keydown", this.handleKeyDown, true);
     document.removeEventListener("mousedown", this.handleDocumentMouseDown);
     this.resizeObserver?.disconnect();
+
+    if (this.scrollLoopRafId !== null) {
+      cancelAnimationFrame(this.scrollLoopRafId);
+      this.scrollLoopRafId = null;
+    }
+    this.scrollWatcherActive = false;
+    this.lastKnownDomScrollTop = 0;
+    this.lastKnownDomScrollLeft = 0;
+    this.scrollVelocityPxMs = 0;
+    this.lastVelocityScrollTop = 0;
+    this.lastVelocityTime = 0;
+    this.scrollbarDragging = false;
+    this.nativeScrollbarActive = false;
+    this.wheelScrollPending = false;
+    this.programmaticScrollDepth = 0;
+    this.scrollCommitInProgress = false;
+    this.hoveredRowIndex = null;
+
+    this.rowPool.reset();
 
     this.sentinelBefore?.remove();
     this.sentinelAfter?.remove();
@@ -284,6 +393,12 @@ export class DomRenderer implements RendererAdapter {
     this.headerPinnedRight = null;
     this.headerSpacer = null;
     this.headerCenterRow = null;
+    this.headerMain = null;
+    this.floatingFilters = null;
+    this.floatingPinnedLeft = null;
+    this.floatingCenter = null;
+    this.floatingCenterRow = null;
+    this.floatingPinnedRight = null;
     this.body = null;
     this.bodyInner = null;
     this.bodyPinnedLeft = null;
@@ -311,6 +426,11 @@ export class DomRenderer implements RendererAdapter {
       !this.headerPinnedRight ||
       !this.headerCenter ||
       !this.headerCenterRow ||
+      !this.floatingFilters ||
+      !this.floatingPinnedLeft ||
+      !this.floatingCenter ||
+      !this.floatingCenterRow ||
+      !this.floatingPinnedRight ||
       !this.bodyPinnedLeft ||
       !this.bodyPinnedRight ||
       !this.centerScroll ||
@@ -327,6 +447,7 @@ export class DomRenderer implements RendererAdapter {
     this.frame = frame;
     this.suppressEditorBlur = !!frame.editing;
     this.host?.style.setProperty("--ol-grid-row-height", `${frame.rowHeight}px`);
+    this.host?.classList.toggle("ol-grid--floating-filters", frame.showFloatingFilters);
     this.host?.style.setProperty("--ol-grid-pinned-left-width", `${frame.pinnedLeftWidth}px`);
     this.host?.style.setProperty("--ol-grid-pinned-right-width", `${frame.pinnedRightWidth}px`);
     this.host!.style.width = `${frame.renderWidth}px`;
@@ -350,13 +471,24 @@ export class DomRenderer implements RendererAdapter {
     this.headerPinnedRight.style.width = `${frame.pinnedRightWidth}px`;
     this.headerCenter.style.width = `${centerScrollWidth}px`;
     this.headerCenterRow.style.width = `${frame.centerWidth}px`;
+    this.floatingFilters.hidden = !frame.showFloatingFilters;
+    this.floatingPinnedLeft.style.width = `${frame.pinnedLeftWidth}px`;
+    this.floatingPinnedRight.style.width = `${frame.pinnedRightWidth}px`;
+    this.floatingCenter.style.width = `${centerScrollWidth}px`;
+    this.floatingCenterRow.style.width = `${frame.centerWidth}px`;
     this.syncHeaderScroll();
-    this.syncBodyScroll();
+    this.syncFloatingFilterScroll();
+    this.syncViewportScrollFromStore();
 
     this.renderHeaderSection(this.headerPinnedLeft, frame.pinnedLeftColumns, frame);
     this.renderHeaderSection(this.headerCenterRow, frame.centerColumns, frame);
     this.renderHeaderSection(this.headerPinnedRight, frame.pinnedRightColumns, frame);
-    this.syncCenterScroll(frame);
+    if (frame.showFloatingFilters) {
+      this.renderFloatingFilterSection(this.floatingPinnedLeft, frame.pinnedLeftColumns, frame);
+      this.renderFloatingFilterSection(this.floatingCenterRow, frame.centerColumns, frame);
+      this.renderFloatingFilterSection(this.floatingPinnedRight, frame.pinnedRightColumns, frame);
+    }
+    this.syncFilterPopup(frame);
     this.renderRows(frame);
     this.syncEditor(frame);
     this.syncFocusRing(frame);
@@ -364,21 +496,98 @@ export class DomRenderer implements RendererAdapter {
     this.suppressEditorBlur = false;
   }
 
-  private syncBodyScroll(): void {
-    if (!this.body || !this.engine) return;
-    const scrollTop = this.engine.getStore().getState().scrollTop;
-    if (this.body.scrollTop !== scrollTop) {
-      this.body.scrollTop = scrollTop;
+  /**
+   * Reconcile store scroll with the live viewport. When the DOM moved (native
+   * scrollbar / track click), adopt DOM into the store — never reset scrollTop
+   * while the user is dragging. When only the store moved (keyboard page,
+   * ensureIndexVisible), push store values into the DOM.
+   */
+  private syncViewportScrollFromStore(): void {
+    if (!this.body || !this.engine || this.scrollCommitInProgress) return;
+
+    const { scrollTop, scrollLeft } = this.engine.getStore().getState();
+    const domScrollTop = this.body.scrollTop;
+    const domScrollLeft = this.centerScroll?.scrollLeft ?? 0;
+
+    const verticalMismatch = domScrollTop !== scrollTop;
+    const horizontalMismatch = domScrollLeft !== scrollLeft;
+
+    if (!verticalMismatch && !horizontalMismatch) {
+      this.lastKnownDomScrollTop = domScrollTop;
+      this.lastKnownDomScrollLeft = domScrollLeft;
+      return;
+    }
+
+    const domVerticalMoved = domScrollTop !== this.lastKnownDomScrollTop;
+    const domHorizontalMoved = domScrollLeft !== this.lastKnownDomScrollLeft;
+
+    if (
+      (verticalMismatch && domVerticalMoved) ||
+      (horizontalMismatch && domHorizontalMoved)
+    ) {
+      this.lastKnownDomScrollTop = domScrollTop;
+      this.lastKnownDomScrollLeft = domScrollLeft;
+      this.dispatchScrollIfChanged(domScrollTop, domScrollLeft);
+      return;
+    }
+
+    if (verticalMismatch) {
+      this.setBodyScrollTop(scrollTop);
+    }
+    if (horizontalMismatch && this.centerScroll) {
+      this.withProgrammaticScroll(() => {
+        this.centerScroll!.scrollLeft = scrollLeft;
+        this.lastKnownDomScrollLeft = scrollLeft;
+      });
     }
   }
 
-  private syncCenterScroll(frame: RenderFrame): void {
-    if (!this.centerScroll || !this.engine) return;
-    const scrollLeft = this.engine.getStore().getState().scrollLeft;
-    if (this.centerScroll.scrollLeft !== scrollLeft) {
-      this.centerScroll.scrollLeft = scrollLeft;
+  private withProgrammaticScroll(run: () => void): void {
+    this.programmaticScrollDepth++;
+    try {
+      run();
+    } finally {
+      this.programmaticScrollDepth--;
     }
-    void frame;
+  }
+
+  private isProgrammaticScroll(): boolean {
+    return this.programmaticScrollDepth > 0;
+  }
+
+  private setBodyScrollTop(scrollTop: number): void {
+    if (!this.body) return;
+    this.withProgrammaticScroll(() => {
+      this.body!.scrollTop = scrollTop;
+      this.lastKnownDomScrollTop = scrollTop;
+    });
+  }
+
+  /** True when pointer is over the native vertical scrollbar gutter. */
+  private isPointerInVerticalScrollbar(event: { clientX: number; clientY: number }): boolean {
+    if (!this.body) return false;
+    const scrollbarWidth = this.body.offsetWidth - this.body.clientWidth;
+    if (scrollbarWidth <= 0) return false;
+    const rect = this.body.getBoundingClientRect();
+    return (
+      event.clientX >= rect.right - scrollbarWidth &&
+      event.clientX <= rect.right &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom
+    );
+  }
+
+  private beginNativeScrollbarInteraction(): void {
+    this.nativeScrollbarActive = true;
+    this.scrollbarDragging = true;
+    const onPointerUp = (): void => {
+      this.nativeScrollbarActive = false;
+      this.scrollbarDragging = false;
+      document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerUp);
+    };
+    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerUp);
   }
 
   private findRowCell(
@@ -433,7 +642,24 @@ export class DomRenderer implements RendererAdapter {
   }
 
   private readonly handleScroll = (): void => {
-    this.flushScrollFromDom();
+    if (!this.body || !this.engine) {
+      this.flushScrollFromDom();
+      return;
+    }
+
+    const targetScrollTop = this.body.scrollTop;
+    const scrollLeft = this.centerScroll?.scrollLeft ?? 0;
+    const storeScrollTop = this.engine.getStore().getState().scrollTop;
+
+    if (!this.isProgrammaticScroll() && targetScrollTop !== storeScrollTop) {
+      const rowHeight = this.frame?.rowHeight ?? 32;
+      const scrollDeltaPx = Math.abs(targetScrollTop - storeScrollTop);
+      if (this.isNativeScrollbarInteraction(scrollDeltaPx, rowHeight)) {
+        this.setBodyScrollTop(storeScrollTop);
+      }
+    }
+
+    this.syncScrollPositionFromDom(targetScrollTop, scrollLeft);
   };
 
   private readonly handleCenterScroll = (): void => {
@@ -447,18 +673,257 @@ export class DomRenderer implements RendererAdapter {
 
   private flushScrollFromDom(): void {
     if (!this.body || !this.engine) return;
-    const scrollTop = this.body.scrollTop;
-    const scrollLeft = this.centerScroll?.scrollLeft ?? 0;
+    this.syncScrollPositionFromDom(
+      this.body.scrollTop,
+      this.centerScroll?.scrollLeft ?? 0,
+    );
+  }
+
+  /**
+   * Sync store + row pool from live DOM scroll. When the virtual range overlaps
+   * the warm pool, apply transform immediately; otherwise refresh rows first.
+   * On high velocity, non-overlapping jumps, or scrollbar drag, hold native
+   * scrollTop until rows are mounted (Tier 2 sync scroll).
+   */
+  private syncScrollPositionFromDom(scrollTop: number, scrollLeft: number): void {
+    if (!this.body || !this.rowsPinned || !this.rowsCenter || !this.rowsPinnedRight || !this.engine) {
+      return;
+    }
+
     this.syncHeaderScroll();
+    this.syncFloatingFilterScroll();
+
+    const state = this.engine.getStore().getState();
+    if (state.scrollTop === scrollTop && state.scrollLeft === scrollLeft) {
+      return;
+    }
+
+    const rowHeight = this.frame?.rowHeight ?? 32;
+    const scrollDeltaFromStore = Math.abs(scrollTop - state.scrollTop);
+    const isNativeScrollbarScroll = this.isNativeScrollbarInteraction(
+      scrollDeltaFromStore,
+      rowHeight,
+    );
+
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const deltaMs =
+      this.lastVelocityTime > 0 ? Math.max(now - this.lastVelocityTime, 1) : 16;
+    const scrollDelta = Math.abs(scrollTop - this.lastVelocityScrollTop);
+    if (scrollTop !== this.lastVelocityScrollTop) {
+      this.scrollVelocityPxMs = scrollDelta / deltaMs;
+      this.lastVelocityScrollTop = scrollTop;
+      this.lastVelocityTime = now;
+    }
+
+    const virtualRange = this.engine.computeVirtualRangeForScrollTop(scrollTop);
+    const containers = {
+      pinnedLeft: this.rowsPinned,
+      center: this.rowsCenter,
+      pinnedRight: this.rowsPinnedRight,
+    };
+    const applied = this.rowPool.getAppliedVirtualRange();
+    const needsSyncScroll =
+      this.rowPool.hasMountedRows() &&
+      shouldSyncScrollBeforePaint({
+        appliedRowStart: applied.rowStart,
+        appliedRowEnd: applied.rowEnd,
+        nextRowStart: virtualRange.rowStart,
+        nextRowEnd: virtualRange.rowEnd,
+        scrollVelocityPxMs: this.scrollVelocityPxMs,
+        isScrollbarDragging: this.scrollbarDragging,
+        isNativeScrollbarScroll,
+        scrollDeltaPx: scrollDeltaFromStore,
+        rowHeight,
+      });
+
+    if (needsSyncScroll) {
+      this.commitScrollAfterRender(scrollTop, scrollLeft, virtualRange.rowOffset, containers);
+      return;
+    }
+
+    const hasRowOverlap = this.rowPool.rangeOverlapsApplied(
+      virtualRange.rowStart,
+      virtualRange.rowEnd,
+    );
+    const canTransformEarly =
+      hasRowOverlap &&
+      this.rowPool.hasMountedRows() &&
+      applied.rowStart === virtualRange.rowStart;
+
+    if (canTransformEarly) {
+      this.rowPool.applyRowOffset(containers, virtualRange.rowOffset);
+    }
+
+    this.dispatchScrollIfChanged(scrollTop, scrollLeft);
+
+    if (!canTransformEarly && (!hasRowOverlap || !this.rowPool.hasMountedRows())) {
+      this.rowPool.applyRowOffset(containers, virtualRange.rowOffset);
+    }
+  }
+
+  /**
+   * Hold body at the last committed scrollTop, render rows for the target
+   * position, then commit native scrollTop in the same turn (no white gap).
+   */
+  private commitScrollAfterRender(
+    targetScrollTop: number,
+    scrollLeft: number,
+    rowOffset: number,
+    containers: { pinnedLeft: HTMLElement; center: HTMLElement; pinnedRight: HTMLElement },
+  ): void {
+    if (!this.body || !this.engine) return;
+
+    const heldScrollTop = this.engine.getStore().getState().scrollTop;
+    this.scrollCommitInProgress = true;
+    try {
+      if (this.body.scrollTop !== heldScrollTop) {
+        this.setBodyScrollTop(heldScrollTop);
+      }
+
+      this.engine.warmSyncRowsAtScrollTop(targetScrollTop);
+
+      this.setBodyScrollTop(targetScrollTop);
+      this.rowPool.applyRowOffset(containers, rowOffset);
+      this.dispatchScrollIfChanged(targetScrollTop, scrollLeft);
+    } finally {
+      this.scrollCommitInProgress = false;
+    }
+  }
+
+  private isNativeScrollbarInteraction(scrollDeltaPx: number, rowHeight: number): boolean {
+    if (this.nativeScrollbarActive || this.scrollbarDragging) return true;
+    if (this.wheelScrollPending) return false;
+    if (this.isProgrammaticScroll()) return false;
+    return scrollDeltaPx >= rowHeight;
+  }
+
+  /** Pre-expand the warm row pool before scrollTop changes (wheel / scrollbar grab). */
+  private preSyncPoolForScrollIntent(direction: "up" | "down" | "both"): void {
+    if (!this.engine || !this.body) return;
+
+    const scrollTop = this.body.scrollTop;
+    this.engine.warmSyncRowsAtScrollTop(scrollTop, overscanForScrollIntent(direction));
+  }
+
+  private readonly handleBodyWheel = (event: WheelEvent): void => {
+    if (event.deltaY === 0) return;
+    this.wheelScrollPending = true;
+    this.preSyncPoolForScrollIntent(event.deltaY > 0 ? "down" : "up");
+  };
+
+  private readonly handleBodyPointerDown = (event: PointerEvent): void => {
+    this.preSyncPoolForScrollIntent("both");
+    const isScrollbarGutter = this.isPointerInVerticalScrollbar(event);
+    if (isScrollbarGutter || event.target === this.body) {
+      if (isScrollbarGutter) {
+        // Prevent mousedown from moving keyboard focus to the grid host / first header.
+        event.preventDefault();
+      }
+      this.beginNativeScrollbarInteraction();
+    }
+  };
+
+  /** Read live scroll into store when it differs from store state. */
+  private dispatchScrollIfChanged(scrollTop: number, scrollLeft: number): void {
+    if (!this.engine) return;
     const state = this.engine.getStore().getState();
     if (state.scrollTop === scrollTop && state.scrollLeft === scrollLeft) return;
+    this.lastKnownDomScrollTop = scrollTop;
+    this.lastKnownDomScrollLeft = scrollLeft;
+    this.wheelScrollPending = false;
     this.engine.getStore().dispatch({ type: "SET_SCROLL", scrollTop, scrollLeft });
+  }
+
+  /** Poll scroll position each frame so DOM scroll updates sync before paint. */
+  private startScrollWatcher(): void {
+    if (this.scrollWatcherActive) return;
+    this.scrollWatcherActive = true;
+    this.scheduleScrollWatcherFrame();
+  }
+
+  private scheduleScrollWatcherFrame(): void {
+    if (!this.scrollWatcherActive || this.scrollLoopRafId !== null) return;
+
+    this.scrollLoopRafId = requestAnimationFrame(() => {
+      this.scrollLoopRafId = null;
+      if (!this.scrollWatcherActive || !this.body || !this.engine) return;
+
+      this.syncScrollPositionFromDom(
+        this.body.scrollTop,
+        this.centerScroll?.scrollLeft ?? 0,
+      );
+
+      queueMicrotask(() => {
+        if (this.scrollWatcherActive) {
+          this.scheduleScrollWatcherFrame();
+        }
+      });
+    });
   }
 
   private syncHeaderScroll(): void {
     if (!this.headerCenterRow) return;
     const scrollLeft = this.centerScroll?.scrollLeft ?? 0;
     this.headerCenterRow.style.transform = `translate3d(-${scrollLeft}px, 0, 0)`;
+  }
+
+  private syncFloatingFilterScroll(): void {
+    if (!this.floatingCenterRow) return;
+    const scrollLeft = this.centerScroll?.scrollLeft ?? 0;
+    this.floatingCenterRow.style.transform = `translate3d(-${scrollLeft}px, 0, 0)`;
+  }
+
+  private closeFilterPopup(): void {
+    this.filterPopupCleanup?.();
+    this.filterPopupCleanup = null;
+  }
+
+  private syncFilterPopup(frame: RenderFrame): void {
+    if (!this.engine || !this.host) return;
+
+    const openColId = frame.openFilterColId;
+    if (!openColId) {
+      this.closeFilterPopup();
+      return;
+    }
+
+    const existingPopup = this.host.querySelector<HTMLElement>("[data-filter-popup='true']");
+    if (existingPopup?.dataset.colId === openColId) {
+      return;
+    }
+
+    this.closeFilterPopup();
+
+    const column = frame.columns.find((entry) => entry.colId === openColId);
+    const filterType = column?.filterType ?? this.engine.getColumnFilterType(openColId);
+    if (!column || !filterType) {
+      this.engine.closeColumnFilter();
+      return;
+    }
+
+    const anchor = this.host.querySelector<HTMLElement>(
+      `[data-col-id="${openColId}"][role='columnheader']`,
+    );
+    if (!anchor) return;
+
+    const model =
+      frame.filterModel[openColId] ?? this.engine.getDefaultColumnFilterModel(openColId);
+
+    this.filterPopupCleanup = mountFilterPopup({
+      colId: openColId,
+      headerName: column.headerName,
+      filterType,
+      model,
+      anchor,
+      host: this.host,
+      onApply: (nextModel) => {
+        this.engine?.applyColumnFilterFromUi(openColId, nextModel, "ui");
+      },
+      onClose: () => {
+        this.engine?.closeColumnFilter();
+        this.closeFilterPopup();
+      },
+    });
   }
 
   private readonly handleHeaderMouseDown = (event: Event): void => {
@@ -529,6 +994,19 @@ export class DomRenderer implements RendererAdapter {
     const mouseEvent = event as MouseEvent;
     if ((mouseEvent.target as HTMLElement | null)?.closest("[data-resize-handle]")) return;
 
+    const filterButton = (mouseEvent.target as HTMLElement | null)?.closest<HTMLElement>(
+      "[data-filter-button]",
+    );
+    if (filterButton && this.engine) {
+      event.stopPropagation();
+      const colId = filterButton.dataset.colId;
+      if (!colId) return;
+      this.engine.setFocusedHeader(colId);
+      this.engine.openColumnFilter(colId);
+      this.focusHeader(colId);
+      return;
+    }
+
     const headerCheckbox = (mouseEvent.target as HTMLElement | null)?.closest<HTMLElement>(
       "[data-header-select-all]",
     );
@@ -556,6 +1034,40 @@ export class DomRenderer implements RendererAdapter {
 
     // Re-render from setFocusedHeader/sort replaces header nodes; syncFocusRing restores focus.
     this.focusHeader(colId);
+  };
+
+  private setHoveredRowIndex(rowIndex: number | null): void {
+    if (this.hoveredRowIndex === rowIndex) return;
+    this.hoveredRowIndex = rowIndex;
+    this.syncRowHoverClasses();
+  }
+
+  private syncRowHoverClasses(): void {
+    const containers = [this.rowsPinned, this.rowsCenter, this.rowsPinnedRight];
+    for (const container of containers) {
+      if (!container) continue;
+      for (const rowEl of container.querySelectorAll<HTMLElement>(".ol-grid__row")) {
+        const index = Number(rowEl.dataset.rowIndex);
+        rowEl.classList.toggle(
+          "ol-grid__row--hover",
+          this.hoveredRowIndex !== null && index === this.hoveredRowIndex,
+        );
+      }
+    }
+  }
+
+  private readonly handleBodyMouseOver = (event: MouseEvent): void => {
+    const rowEl = (event.target as HTMLElement | null)?.closest<HTMLElement>(".ol-grid__row");
+    if (!rowEl) return;
+    const rowIndex = Number(rowEl.dataset.rowIndex);
+    if (Number.isNaN(rowIndex)) return;
+    this.setHoveredRowIndex(rowIndex);
+  };
+
+  private readonly handleBodyMouseLeave = (event: MouseEvent): void => {
+    const related = event.relatedTarget;
+    if (related instanceof Node && this.bodyInner?.contains(related)) return;
+    this.setHoveredRowIndex(null);
   };
 
   private readonly handleRowClick = (event: Event): void => {
@@ -652,6 +1164,7 @@ export class DomRenderer implements RendererAdapter {
 
   private readonly handleHostFocus = (): void => {
     if (!this.engine) return;
+    if (this.nativeScrollbarActive || this.scrollbarDragging) return;
     const state = this.engine.getStore().getState();
     if (state.focusedCell) {
       this.focusCurrentStoreCell();
@@ -1178,134 +1691,120 @@ export class DomRenderer implements RendererAdapter {
       indicator.textContent =
         column.sort === "asc" ? "▲" : column.sort === "desc" ? "▼" : "";
 
+      const children: HTMLElement[] = [label, indicator];
+      if (column.filterType) {
+        children.push(createFilterButton(column.colId, !!column.filterActive));
+      }
+
       const resizeHandle = document.createElement("span");
       resizeHandle.className = "ol-grid__resize-handle";
       resizeHandle.dataset.resizeHandle = "true";
       resizeHandle.setAttribute("aria-hidden", "true");
+      children.push(resizeHandle);
 
-      cell.replaceChildren(label, indicator, resizeHandle);
+      cell.replaceChildren(...children);
       nextChildren.push(cell);
     }
 
     container.replaceChildren(...nextChildren);
-    void frame;
+  }
+
+  private renderFloatingFilterSection(
+    container: HTMLElement,
+    columns: RenderColumn[],
+    frame: RenderFrame,
+  ): void {
+    if (!this.engine) return;
+
+    const nextChildren: HTMLElement[] = [];
+
+    for (const column of columns) {
+      const cell = document.createElement("div");
+      cell.className = "ol-grid__floating-filter-host";
+      cell.style.width = `${column.width}px`;
+      cell.dataset.colId = column.colId;
+
+      if (column.floatingFilter && column.filterType) {
+        cell.appendChild(
+          createFloatingFilterInput(
+            column,
+            frame.filterModel[column.colId],
+            (model) => {
+              this.engine?.applyColumnFilterFromUi(
+                column.colId,
+                model as FilterModelEntry | null,
+                "floating",
+              );
+            },
+          ),
+        );
+      }
+
+      nextChildren.push(cell);
+    }
+
+    container.replaceChildren(...nextChildren);
   }
 
   private renderRows(frame: RenderFrame): void {
     if (!this.rowsPinned || !this.rowsCenter || !this.rowsPinnedRight) return;
 
-    const pinnedLeftCount = frame.pinnedLeftColumns.length;
-    const centerCount = frame.centerColumns.length;
-    const pinnedRightCount = frame.pinnedRightColumns.length;
-    const pinnedExisting = new Map(
-      [...this.rowsPinned.children].map((child) => [
-        (child as HTMLElement).dataset.rowId,
-        child as HTMLElement,
-      ]),
-    );
-    const centerExisting = new Map(
-      [...this.rowsCenter.children].map((child) => [
-        (child as HTMLElement).dataset.rowId,
-        child as HTMLElement,
-      ]),
-    );
-
-    const pinnedRightExisting = new Map(
-      [...this.rowsPinnedRight.children].map((child) => [
-        (child as HTMLElement).dataset.rowId,
-        child as HTMLElement,
-      ]),
-    );
-
-    const nextPinned: HTMLElement[] = [];
-    const nextCenter: HTMLElement[] = [];
-    const nextPinnedRight: HTMLElement[] = [];
-    const focused = frame.focusedCell;
-    const editing = frame.editing;
-
-    for (const row of frame.rows) {
-      const pinnedCells = row.cells.slice(0, pinnedLeftCount);
-      const centerCells = row.cells.slice(pinnedLeftCount, pinnedLeftCount + centerCount);
-      const pinnedRightCells = row.cells.slice(pinnedLeftCount + centerCount);
-      const pinnedColumns = frame.pinnedLeftColumns;
-      const centerColumns = frame.centerColumns;
-      const pinnedRightColumns = frame.pinnedRightColumns;
-
-      let pinnedRowEl = pinnedExisting.get(row.id);
-      if (!pinnedRowEl) {
-        pinnedRowEl = document.createElement("div");
-        pinnedRowEl.className = "ol-grid__row";
-        pinnedRowEl.setAttribute("role", "row");
-      }
-
-      let centerRowEl = centerExisting.get(row.id);
-      if (!centerRowEl) {
-        centerRowEl = document.createElement("div");
-        centerRowEl.className = "ol-grid__row";
-        centerRowEl.setAttribute("role", "row");
-      }
-
-      let pinnedRightRowEl = pinnedRightExisting.get(row.id);
-      if (!pinnedRightRowEl) {
-        pinnedRightRowEl = document.createElement("div");
-        pinnedRightRowEl.className = "ol-grid__row";
-        pinnedRightRowEl.setAttribute("role", "row");
-      }
-
-      for (const rowEl of [pinnedRowEl, centerRowEl, pinnedRightRowEl]) {
+    this.rowPool.syncFrame(
+      {
+        pinnedLeft: this.rowsPinned,
+        center: this.rowsCenter,
+        pinnedRight: this.rowsPinnedRight,
+      },
+      frame,
+      (rowEl, row, renderFrame, width) => {
         rowEl.dataset.rowId = row.id;
         rowEl.dataset.rowIndex = String(row.rowIndex);
-        rowEl.style.height = `${frame.rowHeight}px`;
+        rowEl.style.height = `${renderFrame.rowHeight}px`;
+        rowEl.style.width = `${width}px`;
         rowEl.classList.toggle("ol-grid__row--selected", row.selected);
+        rowEl.classList.toggle(
+          "ol-grid__row--hover",
+          this.hoveredRowIndex !== null && row.rowIndex === this.hoveredRowIndex,
+        );
         rowEl.setAttribute("aria-rowindex", String(row.rowIndex + 1));
         rowEl.setAttribute("aria-selected", String(row.selected));
-      }
+      },
+      (rowEl, section, row, renderFrame) => {
+        const pinnedLeftCount = renderFrame.pinnedLeftColumns.length;
+        const centerCount = renderFrame.centerColumns.length;
+        const cells =
+          section === "pinnedLeft"
+            ? row.cells.slice(0, pinnedLeftCount)
+            : section === "center"
+              ? row.cells.slice(pinnedLeftCount, pinnedLeftCount + centerCount)
+              : row.cells.slice(pinnedLeftCount + centerCount);
+        const columns =
+          section === "pinnedLeft"
+            ? renderFrame.pinnedLeftColumns
+            : section === "center"
+              ? renderFrame.centerColumns
+              : renderFrame.pinnedRightColumns;
+        const colIndexOffset =
+          section === "pinnedLeft"
+            ? 0
+            : section === "center"
+              ? pinnedLeftCount
+              : pinnedLeftCount + centerCount;
 
-      pinnedRowEl.style.width = `${frame.pinnedLeftWidth}px`;
-      centerRowEl.style.width = `${frame.centerWidth}px`;
-      pinnedRightRowEl.style.width = `${frame.pinnedRightWidth}px`;
-
-      pinnedRowEl.replaceChildren(
-        ...this.renderRowCells(pinnedRowEl, pinnedCells, pinnedColumns, row, focused, editing, 0),
-      );
-      centerRowEl.replaceChildren(
-        ...this.renderRowCells(
-          centerRowEl,
-          centerCells,
-          centerColumns,
+        this.patchRowCells(
+          rowEl,
+          cells,
+          columns,
           row,
-          focused,
-          editing,
-          pinnedLeftCount,
-        ),
-      );
-      pinnedRightRowEl.replaceChildren(
-        ...this.renderRowCells(
-          pinnedRightRowEl,
-          pinnedRightCells,
-          pinnedRightColumns,
-          row,
-          focused,
-          editing,
-          pinnedLeftCount + centerCount,
-        ),
-      );
-
-      nextPinned.push(pinnedRowEl);
-      nextCenter.push(centerRowEl);
-      nextPinnedRight.push(pinnedRightRowEl);
-    }
-
-    this.rowsPinned.replaceChildren(...nextPinned);
-    this.rowsCenter.replaceChildren(...nextCenter);
-    this.rowsPinnedRight.replaceChildren(...nextPinnedRight);
-    const rowTransform = `translate3d(0, ${frame.rowOffset}px, 0)`;
-    this.rowsPinned.style.transform = rowTransform;
-    this.rowsCenter.style.transform = rowTransform;
-    this.rowsPinnedRight.style.transform = rowTransform;
+          renderFrame.focusedCell,
+          renderFrame.editing,
+          colIndexOffset,
+        );
+      },
+    );
   }
 
-  private renderRowCells(
+  private patchRowCells(
     rowEl: HTMLElement,
     cells: RenderFrame["rows"][number]["cells"],
     columns: RenderColumn[],
@@ -1313,7 +1812,7 @@ export class DomRenderer implements RendererAdapter {
     focused: RenderFrame["focusedCell"],
     editing: RenderFrame["editing"],
     colIndexOffset: number,
-  ): HTMLElement[] {
+  ): void {
     const existing = new Map(
       [...rowEl.children].map((child) => [
         (child as HTMLElement).dataset.colId,
@@ -1321,7 +1820,7 @@ export class DomRenderer implements RendererAdapter {
       ]),
     );
 
-    return cells.map((cell, index) => {
+    const nextCells: HTMLElement[] = cells.map((cell, index) => {
       const column = columns[index];
       let cellEl = existing.get(cell.colId);
       if (!cellEl) {
@@ -1344,11 +1843,18 @@ export class DomRenderer implements RendererAdapter {
       cellEl.tabIndex = isFocused ? 0 : -1;
 
       if (cell.isSelectionColumn) {
-        cellEl.replaceChildren(this.createCheckbox(row.selected));
+        const checkbox = cellEl.querySelector<HTMLInputElement>(".ol-grid__selection-checkbox");
+        if (!checkbox) {
+          cellEl.replaceChildren(this.createCheckbox(row.selected));
+        } else if (checkbox.checked !== row.selected) {
+          checkbox.checked = row.selected;
+        }
       } else if (isEditing) {
         // Editor DOM is owned by syncEditor — do not clear on refresh (avoids blur → stopEditing).
       } else if (cell.useFrameworkRenderer) {
-        cellEl.replaceChildren();
+        if (cellEl.childElementCount > 0) {
+          cellEl.replaceChildren();
+        }
       } else if (cell.cellRenderer && this.engine) {
         const colDef = this.engine.getColumnModel().getByColId(cell.colId)?.def;
         const node = this.engine.getRowModel().getRowAt(row.rowIndex);
@@ -1371,15 +1877,17 @@ export class DomRenderer implements RendererAdapter {
             registry.set(cell.cellRenderer, renderer);
           }
           renderCellContent(cellEl, params, renderer ? cell.cellRenderer : undefined, registry, cell.value);
-        } else {
+        } else if (cellEl.textContent !== cell.value) {
           cellEl.textContent = cell.value;
         }
-      } else {
+      } else if (cellEl.textContent !== cell.value) {
         cellEl.textContent = cell.value;
       }
 
       return cellEl;
     });
+
+    reconcileRowOrder(rowEl, nextCells);
   }
 
   private syncEditor(frame: RenderFrame): void {

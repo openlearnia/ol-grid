@@ -12,6 +12,7 @@ export default defineConfig({
     alias: {
       "@ol-grid/core": path.join(root, "packages/core/src/index.ts"),
       "@ol-grid/sort": path.join(root, "packages/sort/src/index.ts"),
+      "@ol-grid/filter": path.join(root, "packages/filter/src/index.ts"),
       "@ol-grid/dom-renderer": path.join(root, "packages/dom-renderer/src/index.ts"),
       "@ol-grid/react": path.join(root, "packages/react/src/index.ts"),
       "@ol-grid/vanilla": path.join(root, "packages/vanilla/src/index.ts"),

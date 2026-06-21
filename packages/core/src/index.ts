@@ -69,6 +69,24 @@ export { commitCellEdit } from "./row/commit-cell-edit.js";
 export type { CommitCellEditResult } from "./row/commit-cell-edit.js";
 export { findNextEditableCell } from "./row/find-next-editable-cell.js";
 export { getCellValue, formatCellValue } from "./row/get-cell-value.js";
+export {
+  computeRowVirtualRange,
+  computeVelocityOverscanBoost,
+  computeDirectionalOverscan,
+  overscanForScrollIntent,
+  DEFAULT_OVERSCAN_ROW_COUNT,
+  DIRECTIONAL_SCROLL_BUFFER_ROWS,
+  SCROLL_SETTLE_MS,
+  DIRECTIONAL_VELOCITY_MAX_BOOST,
+  getFirstVisibleRowIndex,
+} from "./virtualizer/compute-row-range.js";
+export type {
+  RowVirtualRange,
+  RowVirtualRangeInput,
+  ScrollDirection,
+  ScrollOverscanState,
+  DirectionalOverscanResult,
+} from "./virtualizer/compute-row-range.js";
 
 /** Primary entry point — alias for createGridEngine. */
 export function createGrid<TData>(options: Parameters<typeof createGridEngine<TData>>[0] = {}) {

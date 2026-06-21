@@ -29,6 +29,9 @@ export interface GridApi<TData = unknown> {
   getColumnState(): ColumnState[];
   applyColumnState(params: ApplyColumnStateParams): boolean;
   setQuickFilterText(text: string): void;
+  setFilterModel(model: Record<string, unknown> | null): void;
+  getFilterModel(): Record<string, unknown>;
+  destroyFilter(colKey: string): void;
   startEditingCell(params: StartEditingCellParams): void;
   stopEditing(cancel?: boolean): void;
   exportDataAsCsv(params?: CsvExportParams): void;

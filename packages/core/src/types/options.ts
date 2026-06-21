@@ -24,6 +24,7 @@ export interface GridOptions<TData = unknown> extends GridEvents<TData> {
   context?: unknown;
   gridId?: string;
   quickFilterText?: string;
+  filterModel?: Record<string, unknown>;
   /** When true (default), blur / click outside commits the active edit. When false, cancels. */
   stopEditingWhenCellsLoseFocus?: boolean;
   modules?: GridModule[];

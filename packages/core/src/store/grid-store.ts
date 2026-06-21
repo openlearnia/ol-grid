@@ -18,6 +18,8 @@ export type GridAction =
   | { type: "SET_FOCUSED_HEADER"; focusedHeaderColId: string | null }
   | { type: "SET_EDITING"; editing: EditingState | null }
   | { type: "SET_QUICK_FILTER"; quickFilterText: string }
+  | { type: "SET_FILTER_MODEL"; filterModel: Record<string, unknown> }
+  | { type: "SET_OPEN_FILTER"; openFilterColId: string | null }
   | { type: "BUMP_ROW_DATA_VERSION" };
 
 export interface GridStore {
@@ -43,6 +45,8 @@ function createInitialState(gridId: string): GridState {
     focusedHeaderColId: null,
     editing: null,
     quickFilterText: "",
+    filterModel: {},
+    openFilterColId: null,
     rowModelType: "clientSide",
     rowModelMeta: {},
   };
@@ -68,6 +72,10 @@ function gridReducer(state: GridState, action: GridAction): GridState {
       return { ...state, editing: action.editing };
     case "SET_QUICK_FILTER":
       return { ...state, quickFilterText: action.quickFilterText };
+    case "SET_FILTER_MODEL":
+      return { ...state, filterModel: action.filterModel };
+    case "SET_OPEN_FILTER":
+      return { ...state, openFilterColId: action.openFilterColId };
     case "BUMP_ROW_DATA_VERSION":
       return { ...state, rowDataVersion: state.rowDataVersion + 1 };
     default:

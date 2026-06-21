@@ -40,9 +40,14 @@ Parent documents: [REQUIREMENTS.md](../REQUIREMENTS.md), [ARCHITECTURE.md](../AR
 | Capability | Status |
 |------------|--------|
 | `computeRowVirtualRange` (fixed row height) | **Done** |
-| DOM renderer row recycling + `translateY` positioning | **Done** |
+| DOM renderer row pool + incremental diff (no `replaceChildren` per scroll) | **Done** |
+| Scroll fast-path: transform sync before store refresh | **Done** |
+| Active scroll rAF loop during momentum scroll | **Done** |
+| DOM renderer row recycling + `translateY` positioning | **Done** (row pool) |
 | Pinned-left viewport (rows + header) | **Done** |
-| `overscanRowCount` default 5 | **Done** |
+| `overscanRowCount` default 3 (`DEFAULT_OVERSCAN_ROW_COUNT`) | **Done** |
+| Directional scroll buffer (MUI DataGrid pattern) | **Done** |
+| Tier 2 sync scroll (render-then-scroll on fast jumps) | **Done** |
 | Pinned-right viewport | **Not started** |
 | Column virtualization | **Not started** |
 | Dynamic row height / prefix-sum cache | **Not started** |
@@ -95,6 +100,41 @@ As a developer, I call `ensureIndexVisible(5000)` after a search so the grid scr
 | REQ-VIRT-11 | `overscanColumnCount` (default 2) MUST apply when column virtualization enabled | Must | T3 |
 | REQ-VIRT-12 | Overscan MUST be disable-able via `suppressRowVirtualisation` / `suppressColumnVirtualisation` | Should | T2 |
 | REQ-VIRT-13 | Infinite/SSRM models SHOULD use overscan to prefetch adjacent blocks — see [infinite-row-model.md](./infinite-row-model.md) | Should | T2 |
+
+### 3.2.1 Directional scroll buffer (Tier 1)
+
+MUI DataGrid-style **directional overscan** reduces white gaps during fast scroll by rendering heavily in the scroll direction only, not symmetrically.
+
+| ID | Requirement | Priority | Tier |
+|----|-------------|----------|------|
+| REQ-VIRT-14 | Idle/default overscan MUST be small and symmetric (default 3 rows each side) | Must | T1 |
+| REQ-VIRT-15 | During active vertical scroll, overscan MUST expand heavily in scroll direction only (~12 rows + velocity boost) | Must | T1 |
+| REQ-VIRT-16 | During active scroll, opposite-direction overscan MUST be zero (not symmetric) | Must | T1 |
+| REQ-VIRT-17 | Directional buffer MUST persist between scroll events until scroll settles (~150ms idle) | Must | T1 |
+| REQ-VIRT-18 | After scroll settles, overscan MUST shrink back to idle default | Must | T1 |
+| REQ-VIRT-19 | Wheel / scrollbar intent MUST pre-expand warm row pool in scroll direction before `scrollTop` changes | Must | T1 |
+| REQ-VIRT-115 | Horizontal directional buffer SHOULD mirror vertical when column virtualization ships | Should | T3 |
+
+**Deferred (future tiers):**
+
+| Approach | Tier | Notes |
+|----------|------|-------|
+| Fake scrollbar track (Google Sheets) — scrollbar thumb decoupled from body | T3 | Full custom scrollbar; sync scroll covers the white-gap case for native scrollbar |
+| Adaptive native + fake scroll by velocity | T3 | Research-heavy; T2 sync scroll handles high-velocity native path |
+
+### 3.2.2 Tier 2 sync scroll (render-then-scroll)
+
+When native `scrollTop` advances faster than the row pool can mount rows, the browser paints an empty viewport (white gap). **Sync scroll** decouples visual scroll from data scroll on high-velocity or non-overlapping range changes.
+
+| ID | Requirement | Priority | Tier |
+|----|-------------|----------|------|
+| REQ-VIRT-20a | When scroll velocity exceeds threshold (~2 px/ms) OR virtual range is non-overlapping with applied pool OR user is dragging the native scrollbar, renderer MUST hold `body.scrollTop` at last committed position | Must | T2 |
+| REQ-VIRT-20b | While held, renderer MUST call `warmSyncRowsAtScrollTop(target)` synchronously, mount rows + apply transform, then set `body.scrollTop = target` in the same turn | Must | T2 |
+| REQ-VIRT-20c | Pinned-left, center, and pinned-right row containers MUST receive the same transform during sync scroll | Must | T2 |
+| REQ-VIRT-20d | Body / center-inner background MUST match row background (`--ol-grid-body-bg`) so any transient gap is not visually jarring | Should | T2 |
+| REQ-VIRT-20e | Slow incremental scroll with overlapping ranges MUST keep the Tier 1 transform-first fast path (no hold) | Must | T2 |
+
+**Tradeoff:** User may feel slight scroll "catch-up" during very fast flings or large track clicks; native scrollbar drag remains functional but rows commit after render rather than before paint.
 
 ### 3.3 Pinned viewports
 

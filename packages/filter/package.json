@@ -1,5 +1,5 @@
 {
-  "name": "@ol-grid/vanilla",
+  "name": "@ol-grid/filter",
   "version": "0.0.0",
   "type": "module",
   "sideEffects": false,
@@ -21,10 +21,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ol-grid/core": "workspace:*",
-    "@ol-grid/dom-renderer": "workspace:*",
-    "@ol-grid/filter": "workspace:*",
-    "@ol-grid/sort": "workspace:*"
+    "@ol-grid/core": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.4.0",

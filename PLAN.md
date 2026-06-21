@@ -272,11 +272,11 @@ Assuming **2-week sprints**, one engineer (scale tasks horizontally when team gr
 - [x] Editable grid demo as Tier 2 exit artifact (§8.2)
 
 ### Sprint 5 — Filtering package
-- [ ] Create `@ol-grid/filter` package
-- [ ] Text / number / date column filters (T2-FL-01)
-- [ ] `setFilterModel` / `getFilterModel` (T2-FL-06)
-- [ ] Filter UI in column header menu (T2-FL-02)
-- [ ] Floating filter row (T2-FL-03, Should)
+- [x] Create `@ol-grid/filter` package
+- [x] Text / number / date column filters (T2-FL-01)
+- [x] `setFilterModel` / `getFilterModel` (T2-FL-06)
+- [x] Filter UI in column header menu (T2-FL-02)
+- [x] Floating filter row (T2-FL-03, Should)
 
 ### Sprint 6 — Data loading & export
 - [ ] `applyTransaction` on CSRM (T2-DM-03)

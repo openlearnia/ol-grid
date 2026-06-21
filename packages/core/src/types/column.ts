@@ -68,6 +68,10 @@ export interface ColumnDef<TData = unknown, TValue = unknown> {
   sortable?: boolean;
   comparator?: SortComparatorFn<TData, TValue>;
   filterable?: boolean;
+  filter?: boolean | "text" | "number" | "date";
+  filterParams?: Record<string, unknown>;
+  filterValueGetter?: (params: ValueGetterParams<TData>) => unknown;
+  floatingFilter?: boolean;
   editable?: boolean | ((params: EditableCallbackParams<TData>) => boolean);
   hide?: boolean;
 

@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@ol-grid/filter':
+        specifier: workspace:*
+        version: link:packages/filter
       '@ol-grid/sort':
         specifier: workspace:*
         version: link:packages/sort
@@ -112,6 +115,19 @@ importers:
         specifier: ^5.8.2
         version: 5.9.3
 
+  packages/filter:
+    dependencies:
+      '@ol-grid/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.1(postcss@8.5.15)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.3
+
   packages/react:
     dependencies:
       '@ol-grid/core':
@@ -120,6 +136,9 @@ importers:
       '@ol-grid/dom-renderer':
         specifier: workspace:*
         version: link:../dom-renderer
+      '@ol-grid/filter':
+        specifier: workspace:*
+        version: link:../filter
       '@ol-grid/sort':
         specifier: workspace:*
         version: link:../sort
@@ -164,6 +183,9 @@ importers:
       '@ol-grid/dom-renderer':
         specifier: workspace:*
         version: link:../dom-renderer
+      '@ol-grid/filter':
+        specifier: workspace:*
+        version: link:../filter
       '@ol-grid/sort':
         specifier: workspace:*
         version: link:../sort

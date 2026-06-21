@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@ol-grid/sort": "workspace:*",
+    "@ol-grid/filter": "workspace:*",
     "@types/node": "^22.13.10",
     "happy-dom": "^20.10.6",
     "tsup": "^8.4.0",

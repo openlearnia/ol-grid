@@ -75,7 +75,16 @@ describe("DomRenderer width layout", () => {
     expect(host.style.maxWidth).toBe("100%");
     expect(header?.style.width).toBe(`${renderWidth}px`);
     expect(bodyInner?.style.width).toBe(`${renderWidth}px`);
-    expect(spacers.length).toBe(2);
+    expect(spacers.length).toBe(3);
+    expect(
+      host.querySelectorAll(".ol-grid__header-main > .ol-grid__layout-spacer").length,
+    ).toBe(1);
+    expect(
+      host.querySelectorAll(".ol-grid__floating-filters > .ol-grid__layout-spacer").length,
+    ).toBe(1);
+    expect(
+      host.querySelectorAll(".ol-grid__body-inner > .ol-grid__layout-spacer").length,
+    ).toBe(1);
 
     const pinnedRightLeft = headerPinnedRight!.offsetLeft;
     const centerRight = headerCenter!.offsetLeft + headerCenter!.offsetWidth;

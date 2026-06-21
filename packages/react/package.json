@@ -23,6 +23,7 @@
   "dependencies": {
     "@ol-grid/core": "workspace:*",
     "@ol-grid/dom-renderer": "workspace:*",
+    "@ol-grid/filter": "workspace:*",
     "@ol-grid/sort": "workspace:*"
   },
   "peerDependencies": {

@@ -10,6 +10,7 @@ export class ClientSideRowModel<TData = unknown> {
   private sourceData: TData[] = [];
   private filteredNodes: RowNode<TData>[] = [];
   private quickFilterText = "";
+  private filterModel: Record<string, unknown> = {};
   private sortModel: Array<{ colId: string; sort: "asc" | "desc" }> = [];
   private pipelineStages: RowModelStage[] = [];
   private getRowIdFn: (params: GetRowIdParams<TData>) => string = ({ index }) =>
@@ -29,6 +30,14 @@ export class ClientSideRowModel<TData = unknown> {
 
   getQuickFilterText(): string {
     return this.quickFilterText;
+  }
+
+  setFilterModel(model: Record<string, unknown>): void {
+    this.filterModel = { ...model };
+  }
+
+  getFilterModel(): Record<string, unknown> {
+    return this.filterModel;
   }
 
   setPipelineStages(stages: RowModelStage[]): void {
@@ -78,11 +87,13 @@ export class ClientSideRowModel<TData = unknown> {
 
   rebuild(
     sortModel: Array<{ colId: string; sort: "asc" | "desc" }>,
+    filterModel: Record<string, unknown>,
     columnDefs: ColumnDef<TData>[],
     api: unknown,
     context: unknown,
   ): void {
     this.sortModel = sortModel;
+    this.filterModel = { ...filterModel };
     this.applyPipeline(columnDefs, api, context);
   }
 
@@ -105,6 +116,7 @@ export class ClientSideRowModel<TData = unknown> {
       api,
       context,
       sortModel: this.sortModel,
+      filterModel: this.filterModel,
     };
 
     let rows: RowNode<TData>[] = this.filteredNodes;
