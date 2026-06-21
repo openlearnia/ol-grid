@@ -1,0 +1,102 @@
+---
+description: Generate high quality git commit messages
+alwaysApply: true
+---
+
+# Git Commit Rules
+
+When generating git commit messages:
+
+## Format
+
+Use Conventional Commits:
+
+```
+<type>(<scope>): <summary>
+```
+
+Examples:
+
+```
+feat(auth): add JWT refresh token support
+fix(grid): resolve keyboard navigation bug
+refactor(docdb): simplify WAL recovery logic
+docs(readme): update installation instructions
+```
+
+## Allowed Types
+
+- feat
+- fix
+- refactor
+- perf
+- docs
+- test
+- build
+- ci
+- chore
+- revert
+
+## Requirements
+
+- Use imperative tense.
+- Keep summary under 72 characters.
+- Lowercase summary.
+- Do not end summary with a period.
+- Scope should be included when obvious.
+- Explain why in the body, not what.
+
+## Body Format
+
+When changes are significant:
+
+```
+<type>(<scope>): <summary>
+
+- reason for change
+- impact of change
+- migration notes if needed
+```
+
+## Breaking Changes
+
+Use:
+
+```
+BREAKING CHANGE: description
+```
+
+## Examples
+
+Good:
+
+```
+feat(functions): add bun worker pool
+
+- reduce cold starts by reusing workers
+- improve execution latency under load
+```
+
+Good:
+
+```
+fix(grid): preserve focus after column resize
+```
+
+Bad:
+
+```
+updated files
+```
+
+Bad:
+
+```
+fixed bug
+```
+
+Bad:
+
+```
+stuff
+```
