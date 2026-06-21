@@ -46,6 +46,25 @@ importers:
         specifier: ^6.2.2
         version: 6.4.3(@types/node@22.19.21)
 
+  examples/infinite:
+    dependencies:
+      '@ol-grid/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@ol-grid/infinite-row-model':
+        specifier: workspace:*
+        version: link:../../packages/infinite-row-model
+      '@ol-grid/vanilla':
+        specifier: workspace:*
+        version: link:../../packages/vanilla
+    devDependencies:
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.3
+      vite:
+        specifier: ^6.2.2
+        version: 6.4.3(@types/node@22.19.21)
+
   examples/react:
     dependencies:
       '@ol-grid/react':
@@ -128,6 +147,19 @@ importers:
         specifier: ^5.8.2
         version: 5.9.3
 
+  packages/infinite-row-model:
+    dependencies:
+      '@ol-grid/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.1(postcss@8.5.15)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.3
+
   packages/react:
     dependencies:
       '@ol-grid/core':
@@ -186,6 +218,9 @@ importers:
       '@ol-grid/filter':
         specifier: workspace:*
         version: link:../filter
+      '@ol-grid/infinite-row-model':
+        specifier: workspace:*
+        version: link:../infinite-row-model
       '@ol-grid/sort':
         specifier: workspace:*
         version: link:../sort

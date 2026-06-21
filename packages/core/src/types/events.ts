@@ -33,6 +33,17 @@ export interface FilterChangedEvent {
   source: string;
 }
 
+export interface FilterOpenedEvent {
+  api: GridApi;
+  colId: string;
+  column: unknown;
+}
+
+export interface DisplayedColumnsChangedEvent {
+  api: GridApi;
+  source: string;
+}
+
 export interface CellValueChangedEvent<TData = unknown> {
   oldValue: unknown;
   newValue: unknown;
@@ -43,8 +54,10 @@ export interface CellValueChangedEvent<TData = unknown> {
   context: unknown;
 }
 
-export interface RowDataUpdatedEvent {
-  api: GridApi;
+export interface RowDataUpdatedEvent<TData = unknown> {
+  api: GridApi<TData>;
+  type?: "full" | "transaction" | "immutable";
+  transaction?: import("../row/apply-transaction.js").RowDataTransaction<TData>;
 }
 
 export interface ColumnResizedEvent {
@@ -61,6 +74,8 @@ export interface GridEvents<TData = unknown> {
   onSelectionChanged?: (event: SelectionChangedEvent) => void;
   onSortChanged?: (event: SortChangedEvent) => void;
   onFilterChanged?: (event: FilterChangedEvent) => void;
+  onFilterOpened?: (event: FilterOpenedEvent) => void;
+  onDisplayedColumnsChanged?: (event: DisplayedColumnsChangedEvent) => void;
   onColumnResized?: (event: ColumnResizedEvent) => void;
   onRowDataUpdated?: (event: RowDataUpdatedEvent) => void;
 }

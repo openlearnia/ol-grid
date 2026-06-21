@@ -55,7 +55,7 @@ export function createSortController(ctx: GridContext) {
         engine.rebuildRowModel(columns);
         const options = ctx.getOptions() as GridOptions;
         options.sortModel = nextModel;
-        options.onSortChanged?.({ api: ctx.getApi(), source: "uiColumnSorted" });
+        engine.dispatchGridEvent("sortChanged", { api: ctx.getApi(), source: "uiColumnSorted" });
       });
     },
 
@@ -77,7 +77,7 @@ export function createSortController(ctx: GridContext) {
         engine.getColumnModel().setColumnState(columns);
         ctx.getStore().dispatch({ type: "SET_COLUMNS", columns });
         engine.rebuildRowModel(columns);
-        options.onSortChanged?.({ api: ctx.getApi(), source });
+        engine.dispatchGridEvent("sortChanged", { api: ctx.getApi(), source });
       });
     },
 

@@ -3,6 +3,11 @@ import type { RowNode } from "../types/row.js";
 import type { GetRowIdParams } from "../types/options.js";
 import type { RowModelStage, RowModelStageContext } from "../modules/module-registry.js";
 import { filterRowsByQuickFilter } from "../filter/quick-filter.js";
+import {
+  applyRowDataTransaction,
+  type RowDataTransaction,
+  type RowDataTransactionResult,
+} from "./apply-transaction.js";
 
 export class ClientSideRowModel<TData = unknown> {
   private rowNodes: RowNode<TData>[] = [];
@@ -64,6 +69,21 @@ export class ClientSideRowModel<TData = unknown> {
 
   getAllFilteredNodes(): RowNode<TData>[] {
     return this.filteredNodes;
+  }
+
+  getSourceData(): TData[] {
+    return this.sourceData;
+  }
+
+  applyTransaction(transaction: RowDataTransaction<TData>): RowDataTransactionResult<TData> {
+    const { sourceData, result } = applyRowDataTransaction(
+      this.sourceData,
+      transaction,
+      this.getRowIdFn,
+      this.rowById,
+    );
+    this.sourceData = sourceData;
+    return result;
   }
 
   updateNodeData(node: RowNode<TData>): void {

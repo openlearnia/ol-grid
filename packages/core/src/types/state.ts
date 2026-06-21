@@ -10,6 +10,8 @@ export interface SelectionState {
   mode: "singleRow" | "multiRow" | "singleCell" | "range";
   selectedRowIds: Set<string>;
   focusedCell: CellPosition | null;
+  /** Last row clicked without Shift — anchor for Shift+click range selection. */
+  selectionAnchorRowId?: string | null;
 }
 
 export interface EditingState {

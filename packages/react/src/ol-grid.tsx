@@ -180,6 +180,8 @@ export const OlGrid = forwardRef(function OlGrid<TData>(
     opts.onSortChanged = options.onSortChanged;
     opts.onRowDataUpdated = options.onRowDataUpdated;
     opts.onFilterChanged = options.onFilterChanged;
+    opts.onFilterOpened = options.onFilterOpened;
+    opts.onDisplayedColumnsChanged = options.onDisplayedColumnsChanged;
     opts.onColumnResized = options.onColumnResized;
     opts.onCellValueChanged = options.onCellValueChanged;
   });

@@ -85,6 +85,24 @@ describe("selection-manager", () => {
     });
   });
 
+  describe("shift range selection", () => {
+    it("selects inclusive range on shift+click", () => {
+      let state = createSelectionState("multiRow");
+      state = handleRowClickSelection(state, {
+        rowId: "1",
+        multiSelect: false,
+        displayedRowIds: ["1", "2", "3", "4"],
+      });
+      state = handleRowClickSelection(state, {
+        rowId: "3",
+        multiSelect: false,
+        shiftRange: true,
+        displayedRowIds: ["1", "2", "3", "4"],
+      });
+      expect(state.selectedRowIds).toEqual(new Set(["1", "2", "3"]));
+    });
+  });
+
   describe("select all", () => {
     const rowIds = ["1", "2", "3"];
 

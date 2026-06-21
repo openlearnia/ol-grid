@@ -2,11 +2,11 @@ import type { ColumnDef } from "@ol-grid/core";
 import type { RowNode } from "@ol-grid/core";
 import { resolveColId } from "@ol-grid/core";
 import type { ColumnFilterModel, FilterModel } from "./types.js";
-import { doesDateFilterPass } from "./date-filter.js";
+import { doesDateFilterPass, DATE_FILTER_OPTIONS } from "./date-filter.js";
 import { getFilterValue } from "./get-filter-value.js";
-import { doesNumberFilterPass } from "./number-filter.js";
+import { doesNumberFilterPass, NUMBER_FILTER_OPTIONS } from "./number-filter.js";
 import { columnHasFilter } from "./resolve-filter-type.js";
-import { doesTextFilterPass, normalizeFilterText } from "./text-filter.js";
+import { doesTextFilterPass, normalizeFilterText, TEXT_FILTER_OPTIONS } from "./text-filter.js";
 
 export function isColumnFilterActive(model: ColumnFilterModel | undefined): boolean {
   if (!model) return false;
@@ -118,14 +118,30 @@ export function applyColumnFilters<TData>(
 
 export function createEmptyFilterModelForType(
   filterType: "text" | "number" | "date",
+  defaultOption?: string,
 ): ColumnFilterModel {
   switch (filterType) {
-    case "number":
-      return { filterType: "number", type: "equals", filter: null };
-    case "date":
-      return { filterType: "date", type: "equals", dateFrom: null };
-    default:
-      return { filterType: "text", type: "contains", filter: "" };
+    case "number": {
+      const type =
+        defaultOption && (NUMBER_FILTER_OPTIONS as readonly string[]).includes(defaultOption)
+          ? (defaultOption as import("./types.js").NumberFilterModel["type"])
+          : "equals";
+      return { filterType: "number", type, filter: null };
+    }
+    case "date": {
+      const type =
+        defaultOption && (DATE_FILTER_OPTIONS as readonly string[]).includes(defaultOption)
+          ? (defaultOption as import("./types.js").DateFilterModel["type"])
+          : "equals";
+      return { filterType: "date", type, dateFrom: null };
+    }
+    default: {
+      const type =
+        defaultOption && (TEXT_FILTER_OPTIONS as readonly string[]).includes(defaultOption)
+          ? (defaultOption as import("./types.js").TextFilterModel["type"])
+          : "contains";
+      return { filterType: "text", type, filter: "" };
+    }
   }
 }
 

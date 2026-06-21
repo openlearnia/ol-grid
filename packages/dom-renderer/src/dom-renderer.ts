@@ -117,6 +117,7 @@ export class DomRenderer implements RendererAdapter {
   private rowsPinned: HTMLElement | null = null;
   private rowsCenter: HTMLElement | null = null;
   private rowsPinnedRight: HTMLElement | null = null;
+  private overlay: HTMLElement | null = null;
   private engine: GridEngine | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private frame: RenderFrame | null = null;
@@ -286,6 +287,13 @@ export class DomRenderer implements RendererAdapter {
     root.appendChild(header);
     root.appendChild(body);
 
+    const overlay = document.createElement("div");
+    overlay.className = "ol-grid__overlay";
+    overlay.hidden = true;
+    overlay.style.display = "none";
+    overlay.setAttribute("aria-live", "polite");
+    root.appendChild(overlay);
+
     const sentinelBefore = createFocusSentinel("before");
     const sentinelAfter = createFocusSentinel("after");
     host.appendChild(sentinelBefore);
@@ -317,6 +325,7 @@ export class DomRenderer implements RendererAdapter {
     this.rowsPinned = rowsPinned;
     this.rowsCenter = rowsCenter;
     this.rowsPinnedRight = rowsPinnedRight;
+    this.overlay = overlay;
 
     body.addEventListener("scroll", this.handleScroll, { passive: true });
     body.addEventListener("wheel", this.handleBodyWheel, { passive: true });
@@ -494,6 +503,7 @@ export class DomRenderer implements RendererAdapter {
     }
     this.syncFilterPopup(frame);
     this.renderRows(frame);
+    this.syncOverlays(frame);
     this.syncEditor(frame);
     this.syncFocusRing(frame);
     this.syncHostTabIndex(frame);
@@ -920,6 +930,7 @@ export class DomRenderer implements RendererAdapter {
       model,
       anchor,
       host: this.host,
+      filterParams: column.filterParams,
       onApply: (nextModel) => {
         this.engine?.applyColumnFilterFromUi(openColId, nextModel, "ui");
       },
@@ -1564,6 +1575,25 @@ export class DomRenderer implements RendererAdapter {
           event.stopPropagation();
           this.runKeyboardNavigation("pageUp", () => this.engine!.pageFocusedCell("up"));
           break;
+        case " ": {
+          const focusedCell = this.engine.getFocusedCell();
+          if (!focusedCell) break;
+          const rowId = this.engine.getRowIdAtDisplayIndex(focusedCell.rowIndex);
+          if (!rowId) break;
+          logKeyboard("keydown handled", {
+            key: "Space",
+            target,
+            handled: true,
+            isEditing,
+            action: "toggle row selection",
+            rowId,
+            ...this.keyboardLogContext(),
+          });
+          event.preventDefault();
+          event.stopPropagation();
+          this.engine.toggleRowSelectionByKeyboard(rowId);
+          break;
+        }
         case "Tab": {
           const focusedCell = this.engine!.getFocusedCell();
           if (event.shiftKey) {
@@ -1895,6 +1925,44 @@ export class DomRenderer implements RendererAdapter {
     }
   }
 
+  private syncOverlays(frame: RenderFrame): void {
+    if (!this.overlay) return;
+
+    const showLoading = !!frame.overlayLoading;
+    const showNoRows = !!frame.overlayNoRows;
+    const showError = !!frame.overlayError;
+
+    if (!showLoading && !showNoRows && !showError) {
+      this.overlay.hidden = true;
+      this.overlay.style.display = "none";
+      this.overlay.replaceChildren();
+      this.overlay.className = "ol-grid__overlay";
+      return;
+    }
+
+    this.overlay.hidden = false;
+    this.overlay.style.display = "flex";
+    this.overlay.replaceChildren();
+
+    if (showError) {
+      this.overlay.className = "ol-grid__overlay ol-grid__overlay--error";
+      this.overlay.textContent =
+        frame.overlayErrorTemplate?.replace("{error}", frame.overlayError ?? "Error") ??
+        frame.overlayError ??
+        "Error loading rows";
+      return;
+    }
+
+    if (showLoading) {
+      this.overlay.className = "ol-grid__overlay ol-grid__overlay--loading";
+      this.overlay.textContent = frame.overlayLoadingTemplate ?? "Loading…";
+      return;
+    }
+
+    this.overlay.className = "ol-grid__overlay ol-grid__overlay--no-rows";
+    this.overlay.textContent = frame.overlayNoRowsTemplate ?? "No rows to show";
+  }
+
   private renderRows(frame: RenderFrame): void {
     if (!this.rowsPinned || !this.rowsCenter || !this.rowsPinnedRight) return;
 
@@ -1988,6 +2056,8 @@ export class DomRenderer implements RendererAdapter {
 
       cellEl.classList.toggle("ol-grid__cell--focused", isFocused && !isEditing);
       cellEl.classList.toggle("ol-grid__cell--editing", isEditing);
+      cellEl.classList.toggle("ol-grid__cell--stub", !!cell.isStub);
+      cellEl.classList.toggle("ol-grid__cell--stub-failed", !!cell.stubFailed);
       cellEl.setAttribute("aria-colindex", String(colIndexOffset + index + 1));
       cellEl.tabIndex = isFocused ? 0 : -1;
 
@@ -1998,6 +2068,16 @@ export class DomRenderer implements RendererAdapter {
         } else if (checkbox.checked !== row.selected) {
           checkbox.checked = row.selected;
         }
+      } else if (cell.isStub) {
+        cellEl.replaceChildren();
+        if (cell.stubFailed) {
+          cellEl.textContent = cell.value || "Error";
+        } else {
+          const skeleton = document.createElement("span");
+          skeleton.className = "ol-grid__cell-stub";
+          skeleton.setAttribute("aria-hidden", "true");
+          cellEl.appendChild(skeleton);
+        }
       } else if (isEditing) {
         // Editor DOM is owned by syncEditor — do not clear on refresh (avoids blur → stopEditing).
       } else if (cell.useFrameworkRenderer) {
@@ -2006,7 +2086,7 @@ export class DomRenderer implements RendererAdapter {
         }
       } else if (cell.cellRenderer && this.engine) {
         const colDef = this.engine.getColumnModel().getByColId(cell.colId)?.def;
-        const node = this.engine.getRowModel().getRowAt(row.rowIndex);
+        const node = this.engine.getRowNode(row.id);
         if (colDef && node) {
           const params: CellRendererParams = {
             value: getCellValueFromEngine(this.engine, node, colDef),

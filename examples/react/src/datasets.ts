@@ -25,6 +25,7 @@ export interface Person {
   department: string;
   location: string;
   startYear: number;
+  joinDate: string;
   salary: number;
   status: string;
 }
@@ -91,6 +92,7 @@ function generateEmployees(count: number): Person[] {
       department: departments[index % departments.length]!,
       location: locations[index % locations.length]!,
       startYear: 2015 + (index % 10),
+      joinDate: `${2015 + (index % 10)}-${String((index % 12) + 1).padStart(2, "0")}-15`,
       salary: 70000 + (index % 50) * 1500,
       status: statuses[index % statuses.length]!,
     };
@@ -124,8 +126,14 @@ const employeeColumnDefs: DemoColumnDef[] = [
     floatingFilter: true,
   },
   { field: "role", headerName: "Role", width: 120, editable: true, filter: "text" },
-  { field: "department", headerName: "Department", width: 130 },
+  { field: "department", headerName: "Department", width: 130, filter: "text", floatingFilter: true },
   { field: "location", headerName: "Location", width: 110 },
+  {
+    field: "joinDate",
+    headerName: "Join date",
+    width: 110,
+    filter: "date",
+  },
   {
     field: "startYear",
     headerName: "Start",
@@ -156,7 +164,7 @@ const employeeColumnDefs: DemoColumnDef[] = [
   {
     field: "status",
     headerName: "Status",
-    width: 120,
+    flex: 1,
     editable: true,
     cellEditor: "select",
     cellEditorParams: { values: statuses },
@@ -201,6 +209,7 @@ function generateWideEmployees(count: number): Record<string, unknown>[] {
       department: departments[index % departments.length]!,
       location: locations[index % locations.length]!,
       startYear: 2015 + (index % 10),
+      joinDate: `${2015 + (index % 10)}-${String((index % 12) + 1).padStart(2, "0")}-15`,
       salary: 70000 + (index % 50) * 1500,
       status: statuses[index % statuses.length]!,
       team: `Team ${(index % 12) + 1}`,

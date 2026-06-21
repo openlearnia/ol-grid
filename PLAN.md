@@ -4,7 +4,7 @@
 > **Architecture:** [ARCHITECTURE.md](./ARCHITECTURE.md)  
 > **Feature specs:** [requirements/README.md](./requirements/README.md)  
 > **Last audited:** 2026-06-18  
-> **Tests:** 72 passing (19 files) · **Packages shipped:** 5 (`core`, `dom-renderer`, `sort`, `react`, `vanilla`)
+> **Tests:** 180+ passing · **Packages shipped:** 7 (`core`, `dom-renderer`, `sort`, `filter`, `infinite-row-model`, `react`, `vanilla`)
 
 ---
 
@@ -279,10 +279,10 @@ Assuming **2-week sprints**, one engineer (scale tasks horizontally when team gr
 - [x] Floating filter row (T2-FL-03, Should)
 
 ### Sprint 6 — Data loading & export
-- [ ] `applyTransaction` on CSRM (T2-DM-03)
-- [ ] `@ol-grid/infinite-row-model` + mock REST demo (T2-DM-01/02)
-- [ ] CSV: `getDataAsCsv`, `onlySelected`, `processCellCallback` (REQ-EX-*)
-- [ ] Loading / error overlays in dom-renderer (T2-DM-05)
+- [x] `applyTransaction` on CSRM (T2-DM-03)
+- [x] `@ol-grid/infinite-row-model` + mock REST demo (T2-DM-01/02)
+- [x] CSV: `getDataAsCsv`, `onlySelected`, `processCellCallback` (REQ-EX-*)
+- [x] Loading / error overlays in dom-renderer (T2-DM-05)
 
 ### Sprint 7 — Multi-framework & controlled mode
 - [ ] `@ol-grid/vue` composable + component (T2-AD-01)
@@ -343,7 +343,7 @@ Assuming **2-week sprints**, one engineer (scale tasks horizontally when team gr
 | Criterion | Status |
 |-----------|--------|
 | Editable grid demo with validation and Tab navigation between cells | **Done** — vanilla + React demos with valueParser, valueSetter, number/select editors, Tab nav |
-| Infinite row model demo against mock REST API | **Not started** |
+| Infinite row model demo against mock REST API | **Done** — `examples/infinite` with mock datasource |
 | Vue and Svelte examples at parity with React basic demo | **Not started** |
 | CSV export matches displayed (filtered/sorted) data | **Done** — uses `getAllFilteredNodes()` |
 | Migration guide published with side-by-side AG Grid ↔ ol-grid snippets | **Not started** |
@@ -418,4 +418,4 @@ Accurate snapshot of `packages/` for planners:
 | Date | Change |
 |------|--------|
 | 2026-06-18 | Initial PLAN.md from codebase + requirements audit |
-| 2026-06-18 | Restored PLAN.md after accidental deletion |
+| 2026-06-21 | Sprint 6: applyTransaction, infinite row model, CSV export params, loading/error overlays |

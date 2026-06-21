@@ -53,4 +53,20 @@ describe("generateCsv", () => {
     const csv = generateCsv(rows, columnDefs, null, null, { includeHeaders: false });
     expect(csv).toBe("Alice,10");
   });
+
+  it("applies processCellCallback", () => {
+    const rows = [node({ name: "Alice", amount: 10 }, 0)];
+    const csv = generateCsv(rows, columnDefs, null, null, {
+      processCellCallback: ({ value }) => `[${value}]`,
+    });
+    expect(csv).toBe("Name,Amount\r\n[Alice],[10]");
+  });
+
+  it("applies processHeaderCallback", () => {
+    const rows = [node({ name: "Alice", amount: 10 }, 0)];
+    const csv = generateCsv(rows, columnDefs, null, null, {
+      processHeaderCallback: ({ colDef }) => colDef.headerName?.toUpperCase() ?? "",
+    });
+    expect(csv).toBe("NAME,AMOUNT\r\nAlice,10");
+  });
 });

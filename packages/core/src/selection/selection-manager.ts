@@ -25,13 +25,20 @@ export function isRowSelected(state: SelectionState, rowId: string): boolean {
 export interface RowClickSelectionParams {
   rowId: string;
   multiSelect: boolean;
+  shiftRange?: boolean;
+  displayedRowIds?: readonly string[];
 }
 
 export function handleRowClickSelection(
   state: SelectionState,
   params: RowClickSelectionParams,
 ): SelectionState {
-  const { rowId, multiSelect } = params;
+  const { rowId, multiSelect, shiftRange, displayedRowIds } = params;
+
+  if (state.mode === "multiRow" && shiftRange && displayedRowIds?.length) {
+    const anchor = state.selectionAnchorRowId ?? rowId;
+    return selectRowRange(state, anchor, rowId, displayedRowIds);
+  }
 
   if (state.mode === "singleRow") {
     if (state.selectedRowIds.has(rowId) && state.selectedRowIds.size === 1) {
@@ -40,6 +47,7 @@ export function handleRowClickSelection(
     return {
       ...state,
       selectedRowIds: new Set([rowId]),
+      selectionAnchorRowId: rowId,
     };
   }
 
@@ -53,15 +61,36 @@ export function handleRowClickSelection(
       }
     } else {
       if (next.size === 1 && next.has(rowId)) {
-        return state;
+        return { ...state, selectionAnchorRowId: rowId };
       }
       next.clear();
       next.add(rowId);
     }
-    return { ...state, selectedRowIds: next };
+    return { ...state, selectedRowIds: next, selectionAnchorRowId: rowId };
   }
 
   return state;
+}
+
+export function selectRowRange(
+  state: SelectionState,
+  anchorRowId: string,
+  targetRowId: string,
+  displayedRowIds: readonly string[],
+): SelectionState {
+  if (state.mode !== "multiRow") return state;
+
+  const anchorIdx = displayedRowIds.indexOf(anchorRowId);
+  const targetIdx = displayedRowIds.indexOf(targetRowId);
+  if (anchorIdx < 0 || targetIdx < 0) return state;
+
+  const start = Math.min(anchorIdx, targetIdx);
+  const end = Math.max(anchorIdx, targetIdx);
+  const next = new Set<string>();
+  for (let i = start; i <= end; i++) {
+    next.add(displayedRowIds[i]!);
+  }
+  return { ...state, selectedRowIds: next, selectionAnchorRowId: anchorRowId };
 }
 
 export function toggleRowSelection(state: SelectionState, rowId: string): SelectionState {

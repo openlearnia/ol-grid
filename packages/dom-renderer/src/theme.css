@@ -39,6 +39,7 @@
 }
 
 .ol-grid__root {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -452,4 +453,55 @@
   height: 100%;
   max-width: 100%;
   min-height: 400px;
+}
+
+.ol-grid__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ol-grid-muted-color);
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* display:flex above overrides UA [hidden]{display:none} — must not paint when inactive */
+.ol-grid__overlay[hidden] {
+  display: none !important;
+}
+
+.ol-grid__overlay--error {
+  color: #b91c1c;
+}
+
+.ol-grid__cell--stub {
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: ol-grid-stub-shimmer 1.2s ease-in-out infinite;
+}
+
+.ol-grid__cell-stub {
+  display: block;
+  width: 70%;
+  height: 10px;
+  border-radius: 4px;
+  background: #e2e8f0;
+}
+
+.ol-grid__cell--stub-failed {
+  color: #b91c1c;
+  animation: none;
+  background: #fef2f2;
+}
+
+@keyframes ol-grid-stub-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }

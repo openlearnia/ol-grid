@@ -1,17 +1,51 @@
 import type { GridOptions, SortModel } from "./options.js";
-import type { ApplyColumnStateParams, ColumnState } from "./column.js";
+import type { ApplyColumnStateParams, ColumnDef, ColumnState } from "./column.js";
 import type { RowNode } from "./row.js";
 import type { CellPosition } from "./state.js";
+import type { RowDataTransaction, RowDataTransactionResult } from "../row/apply-transaction.js";
+import type { GridEventMap, GridEventType } from "../events/grid-events.js";
+import type { EventUnsubscribe } from "../events/event-bus.js";
+import type {
+  DisplayedColumnsChangedEvent,
+  FilterChangedEvent,
+  FilterOpenedEvent,
+  SelectionChangedEvent,
+  SortChangedEvent,
+} from "./events.js";
+
+export type Unsubscribe = EventUnsubscribe;
 
 export interface StartEditingCellParams {
   rowIndex: number;
   colKey: string;
 }
 
+export interface ProcessCellForExportParams<TData = unknown> {
+  value: unknown;
+  node: RowNode<TData>;
+  column: ColumnDef<TData>;
+  colDef: ColumnDef<TData>;
+  api: GridApi<TData>;
+  context: unknown;
+}
+
+export interface ProcessHeaderForExportParams<TData = unknown> {
+  column: ColumnDef<TData>;
+  colDef: ColumnDef<TData>;
+  api: GridApi<TData>;
+  context: unknown;
+}
+
 export interface CsvExportParams {
   fileName?: string;
   columnSeparator?: string;
+  includeHeaders?: boolean;
+  onlySelected?: boolean;
+  processCellCallback?: (params: ProcessCellForExportParams) => string;
+  processHeaderCallback?: (params: ProcessHeaderForExportParams) => string;
 }
+
+export type { RowDataTransaction, RowDataTransactionResult };
 
 export interface GridApi<TData = unknown> {
   setGridOption<K extends keyof GridOptions<TData>>(
@@ -35,7 +69,24 @@ export interface GridApi<TData = unknown> {
   startEditingCell(params: StartEditingCellParams): void;
   stopEditing(cancel?: boolean): void;
   exportDataAsCsv(params?: CsvExportParams): void;
+  getDataAsCsv(params?: CsvExportParams): string;
+  applyTransaction(transaction: RowDataTransaction<TData>): RowDataTransactionResult<TData>;
+  refreshInfiniteCache(): void;
+  purgeInfiniteCache(): void;
+  getInfiniteRowCount(): number;
+  isLastRowIndexKnown(): boolean;
   getSortModel(): SortModel;
   setSortModel(model: SortModel): void;
+  selectAll(): void;
+  deselectAll(): void;
+  addEventListener<T extends GridEventType>(
+    type: T,
+    listener: (event: GridEventMap[T]) => void,
+  ): void;
+  removeEventListener<T extends GridEventType>(
+    type: T,
+    listener: (event: GridEventMap[T]) => void,
+  ): void;
+  onFilterChanged(listener: (event: FilterChangedEvent) => void): Unsubscribe;
   destroy(): void;
 }

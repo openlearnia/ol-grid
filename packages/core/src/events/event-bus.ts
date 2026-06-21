@@ -22,6 +22,10 @@ export class EventBus {
     }
   }
 
+  off(event: string, handler: EventHandler): void {
+    this.handlers.get(event)?.delete(handler);
+  }
+
   clear(): void {
     this.handlers.clear();
   }

@@ -39,8 +39,17 @@ const DATE_OPTIONS = [
   ["inRange", "In range"],
 ] as const;
 
-/** Debounce for text filter value inputs (popup + floating). */
-const FILTER_INPUT_DEBOUNCE_MS = 400;
+/** Default debounce for text filter value inputs (popup + floating). */
+const DEFAULT_FILTER_INPUT_DEBOUNCE_MS = 400;
+
+function readDebounceMs(filterParams?: Record<string, unknown>): number {
+  const value = filterParams?.debounceMs;
+  return typeof value === "number" && value >= 0 ? value : DEFAULT_FILTER_INPUT_DEBOUNCE_MS;
+}
+
+function readDefaultOption(filterParams?: Record<string, unknown>): string | undefined {
+  return typeof filterParams?.defaultOption === "string" ? filterParams.defaultOption : undefined;
+}
 
 function modelToApply(model: FilterModelEntry): FilterModelEntry | null {
   if (readPrimaryValue(model) === "") return null;
@@ -51,25 +60,26 @@ function cloneModel(model: FilterModelEntry): FilterModelEntry {
   return { ...model };
 }
 
-function defaultModel(filterType: FilterType): FilterModelEntry {
+function defaultModel(filterType: FilterType, filterParams?: Record<string, unknown>): FilterModelEntry {
   switch (filterType) {
     case "number":
-      return { filterType: "number", type: "equals", filter: null };
+      return { filterType: "number", type: readDefaultOption(filterParams) ?? "equals", filter: null };
     case "date":
-      return { filterType: "date", type: "equals", dateFrom: null };
+      return { filterType: "date", type: readDefaultOption(filterParams) ?? "equals", dateFrom: null };
     default:
-      return { filterType: "text", type: "contains", filter: "" };
+      return { filterType: "text", type: readDefaultOption(filterParams) ?? "contains", filter: "" };
   }
 }
 
 function modelFromState(
   filterType: FilterType,
   existing: unknown,
+  filterParams?: Record<string, unknown>,
 ): FilterModelEntry {
   if (existing && typeof existing === "object" && (existing as FilterModelEntry).filterType === filterType) {
     return cloneModel(existing as FilterModelEntry);
   }
-  return defaultModel(filterType);
+  return defaultModel(filterType, filterParams);
 }
 
 function readPrimaryValue(model: FilterModelEntry): string {
@@ -155,12 +165,14 @@ export interface FilterPopupOptions {
   model: unknown;
   anchor: HTMLElement;
   host: HTMLElement;
+  filterParams?: Record<string, unknown>;
   onApply: (model: FilterModelEntry | null) => void;
   onClose: () => void;
 }
 
 export function mountFilterPopup(options: FilterPopupOptions): () => void {
-  let draft = modelFromState(options.filterType, options.model);
+  let draft = modelFromState(options.filterType, options.model, options.filterParams);
+  const debounceMs = readDebounceMs(options.filterParams);
 
   const popup = document.createElement("div");
   popup.className = "ol-grid__filter-popup";
@@ -235,7 +247,7 @@ export function mountFilterPopup(options: FilterPopupOptions): () => void {
 
   const scheduleCommit = () => {
     if (timer) clearTimeout(timer);
-    timer = setTimeout(commit, FILTER_INPUT_DEBOUNCE_MS);
+    timer = setTimeout(commit, debounceMs);
   };
 
   const syncSecondary = () => {
@@ -300,7 +312,8 @@ export function createFloatingFilterInput(
   onChange: (model: FilterModelEntry | null) => void,
 ): HTMLElement {
   const filterType = column.filterType ?? "text";
-  let draft = modelFromState(filterType, model);
+  let draft = modelFromState(filterType, model, column.filterParams);
+  const debounceMs = readDebounceMs(column.filterParams);
   let timer: ReturnType<typeof setTimeout> | null = null;
 
   const wrapper = document.createElement("div");
@@ -320,7 +333,7 @@ export function createFloatingFilterInput(
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       onChange(modelToApply(draft));
-    }, FILTER_INPUT_DEBOUNCE_MS);
+    }, debounceMs);
   };
 
   input.addEventListener("input", () => {
@@ -340,7 +353,7 @@ export function syncFloatingFilterInputValue(
 ): void {
   if (document.activeElement === input) return;
   const filterType = column.filterType ?? "text";
-  const draft = modelFromState(filterType, model);
+  const draft = modelFromState(filterType, model, column.filterParams);
   const nextValue = readPrimaryValue(draft);
   if (input.value !== nextValue) {
     input.value = nextValue;

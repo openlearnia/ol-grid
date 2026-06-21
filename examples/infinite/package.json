@@ -1,0 +1,21 @@
+{
+  "name": "@ol-grid/example-infinite",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "predev": "pnpm --filter @ol-grid/vanilla... run build && pnpm --filter @ol-grid/infinite-row-model run build",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ol-grid/core": "workspace:*",
+    "@ol-grid/infinite-row-model": "workspace:*",
+    "@ol-grid/vanilla": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2"
+  }
+}

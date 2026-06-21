@@ -46,7 +46,7 @@ export function createFilterController(ctx: GridContext) {
     options.filterModel = next;
     ctx.getStore().dispatch({ type: "SET_FILTER_MODEL", filterModel: next });
     engine.rebuildRowModel();
-    options.onFilterChanged?.({ api: ctx.getApi(), source });
+    engine.dispatchGridEvent("filterChanged", { api: ctx.getApi(), source });
   }
 
   function destroyFilter(colKey: string): void {
@@ -94,7 +94,21 @@ export function createFilterController(ctx: GridContext) {
     const filterType = getFilterTypeForColumn(colId);
     if (!filterType) return null;
     const existing = getFilterModel()[colId];
-    return existing ?? createEmptyFilterModelForType(filterType);
+    if (existing) return existing;
+    const columnDefs = engine.getOptions().columnDefs ?? [];
+    const defaultColDef = engine.getOptions().defaultColDef;
+    const index = columnDefs.findIndex((def, i) => resolveColId(def, i) === colId);
+    const merged =
+      index >= 0
+        ? defaultColDef
+          ? { ...defaultColDef, ...columnDefs[index]! }
+          : columnDefs[index]!
+        : undefined;
+    const defaultOption =
+      typeof merged?.filterParams?.defaultOption === "string"
+        ? merged.filterParams.defaultOption
+        : undefined;
+    return createEmptyFilterModelForType(filterType, defaultOption);
   }
 
   function hasFloatingFilters(): boolean {

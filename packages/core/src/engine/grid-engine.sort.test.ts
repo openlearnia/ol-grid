@@ -1,5 +1,6 @@
 /** @vitest-environment happy-dom */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { SortModule } from "@ol-grid/sort";
 import { createGridEngine } from "./grid-engine.js";
 
 interface Person {
@@ -41,6 +42,7 @@ describe("GridEngine sort API", () => {
     ];
 
     const engine = createGridEngine<Person>({
+      modules: [SortModule],
       getRowId: ({ data }) => String(data.id),
       columnDefs: [
         { field: "name", headerName: "Name", width: 140 },

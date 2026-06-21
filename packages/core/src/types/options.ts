@@ -12,12 +12,35 @@ export type RowSelectionOption = "single" | "multiple";
 
 export type SortModel = Array<{ colId: string; sort: "asc" | "desc" }>;
 
+export interface InfiniteGetRowsParams<TData = unknown> {
+  startRow: number;
+  endRow: number;
+  sortModel: SortModel;
+  filterModel: Record<string, unknown>;
+  context: unknown;
+  success: (result: { rows: TData[]; rowCount?: number }) => void;
+  fail: () => void;
+  requestId: number;
+}
+
+export interface InfiniteDatasource<TData = unknown> {
+  getRows(params: InfiniteGetRowsParams<TData>): void | Promise<void>;
+  destroy?(): void;
+}
+
 export interface GridOptions<TData = unknown> extends GridEvents<TData> {
   columnDefs?: ColumnDef<TData>[];
   defaultColDef?: Partial<ColumnDef<TData>>;
   sortModel?: SortModel;
   rowData?: TData[];
   rowModelType?: RowModelType;
+  datasource?: InfiniteDatasource<TData>;
+  cacheBlockSize?: number;
+  maxBlocksInCache?: number;
+  infiniteInitialRowCount?: number;
+  overlayLoadingTemplate?: string;
+  overlayNoRowsTemplate?: string;
+  overlayErrorTemplate?: string;
   rowHeight?: number;
   rowSelection?: RowSelectionOption;
   getRowId?: (params: GetRowIdParams<TData>) => string;

@@ -17,4 +17,6 @@ export type RowModelType = "clientSide" | "infinite" | "serverSide";
 export interface RowModelMeta {
   loading?: boolean;
   error?: string | null;
+  /** Block indices that failed to load (infinite row model). */
+  failedBlocks?: number[];
 }

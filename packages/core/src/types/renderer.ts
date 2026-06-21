@@ -17,6 +17,7 @@ export interface RenderColumn {
   filterType?: "text" | "number" | "date" | null;
   filterActive?: boolean;
   floatingFilter?: boolean;
+  filterParams?: Record<string, unknown>;
 }
 
 import type { CellRendererFn } from "./cell-renderer.js";
@@ -27,6 +28,8 @@ export interface RenderCell {
   isSelectionColumn?: boolean;
   selected?: boolean;
   editable?: boolean;
+  isStub?: boolean;
+  stubFailed?: boolean;
   useFrameworkRenderer?: boolean;
   frameworkRenderer?: unknown;
   cellRenderer?: string | CellRendererFn;
@@ -71,6 +74,12 @@ export interface RenderFrame {
   filterModel: Record<string, unknown>;
   openFilterColId: string | null;
   showFloatingFilters: boolean;
+  overlayLoading?: boolean;
+  overlayNoRows?: boolean;
+  overlayError?: string | null;
+  overlayLoadingTemplate?: string;
+  overlayNoRowsTemplate?: string;
+  overlayErrorTemplate?: string;
 }
 
 export interface RendererAdapter {

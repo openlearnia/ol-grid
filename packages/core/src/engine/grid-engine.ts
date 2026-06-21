@@ -3,8 +3,10 @@ import { mergeColumnState } from "../column/apply-column-state.js";
 import { ColumnModel } from "../column/column-model.js";
 import { mergeColumnDefs } from "../column/merge-column-defs.js";
 import { resolveColId } from "../column/resolve-col-id.js";
-import { EventBus } from "../events/event-bus.js";
-import { downloadCsvContent, generateCsv } from "../export/csv-export.js";
+import { EventBus, type EventHandler } from "../events/event-bus.js";
+import type { GridEventMap, GridEventType } from "../events/grid-events.js";
+import { requireGridModule } from "../errors/ol-grid-error.js";
+import { downloadCsvContent, generateCsv, resolveCsvExportOptions } from "../export/csv-export.js";
 import { createGridContext } from "../modules/grid-context.js";
 import { ModuleRegistry, type GridModule, type RowModelStage } from "../modules/module-registry.js";
 import { ClientSideRowModel } from "../row/client-side-row-model.js";
@@ -25,13 +27,20 @@ import {
 } from "../selection/selection-manager.js";
 import { createGridStore, type GridStore, type Unsubscribe } from "../store/grid-store.js";
 import type { CellRendererFn } from "../types/cell-renderer.js";
-import type { GridApi } from "../types/api.js";
+import type { GridApi, RowDataTransaction, RowDataTransactionResult, CsvExportParams } from "../types/api.js";
 import type { ColumnDef, ColumnState, ApplyColumnStateParams } from "../types/column.js";
 import type { NormalizedColumn } from "../column/column-model.js";
 import type { GetRowIdParams, GridOptions, SortModel } from "../types/options.js";
 import type { RenderFrame, RendererAdapter } from "../types/renderer.js";
 import type { RowNode } from "../types/row.js";
 import type { CellPosition, SelectionState } from "../types/state.js";
+import type {
+  DisplayedColumnsChangedEvent,
+  FilterChangedEvent,
+  FilterOpenedEvent,
+  SelectionChangedEvent,
+  SortChangedEvent,
+} from "../types/events.js";
 import {
   computeRowVirtualRange,
   computeDirectionalOverscan,
@@ -42,11 +51,57 @@ import {
 
 const DEFAULT_ROW_HEIGHT = 32;
 
+const SORT_MODULE_NAME = "SortModule";
+const FILTER_MODULE_NAME = "FilterModule";
+
+type GridEventCallbackMap = {
+  filterChanged: FilterChangedEvent;
+  selectionChanged: SelectionChangedEvent;
+  sortChanged: SortChangedEvent;
+  displayedColumnsChanged: DisplayedColumnsChangedEvent;
+  filterOpened: FilterOpenedEvent;
+};
+
+const GRID_EVENT_OPTION_KEYS: {
+  [K in keyof GridEventCallbackMap]: keyof GridOptions;
+} = {
+  filterChanged: "onFilterChanged",
+  selectionChanged: "onSelectionChanged",
+  sortChanged: "onSortChanged",
+  displayedColumnsChanged: "onDisplayedColumnsChanged",
+  filterOpened: "onFilterOpened",
+};
+
 interface SortControllerLike {
   toggleColumnSort(colId: string): void;
   getSortModel(): SortModel;
   setSortModel(model: SortModel, source?: "api" | "uiColumnSorted"): void;
   rebuildFromColumns(columns: ColumnState[]): void;
+}
+
+interface InfiniteRowModelControllerLike {
+  init(): void;
+  onSortOrFilterChanged(
+    sortModel: SortModel,
+    filterModel: Record<string, unknown>,
+    quickFilterText: string,
+  ): void;
+  ensureRangeLoaded(startRow: number, endRow: number): void;
+  refreshInfiniteCache(): void;
+  purgeInfiniteCache(): void;
+  getInfiniteRowCount(): number;
+  isLastRowIndexKnown(): boolean;
+  destroy(): void;
+}
+
+interface InfiniteRowModelLike<TData = unknown> {
+  getRowCount(): number;
+  getRowAt(index: number): RowNode<TData> | undefined;
+  getRowById(id: string): RowNode<TData> | undefined;
+  forEachNode(callback: (node: RowNode<TData>) => void): void;
+  getAllFilteredNodes(): RowNode<TData>[];
+  ensureRangeLoaded(startRow: number, endRow: number): void;
+  isLastRowIndexKnown(): boolean;
 }
 
 interface FilterControllerLike {
@@ -156,13 +211,13 @@ function createGridApi<TData>(
       engine.setOption(key, value);
     },
     getDisplayedRowCount() {
-      return engine.getRowModel().getRowCount();
+      return engine.getDisplayedRowCount();
     },
     getRowNode(id) {
-      return engine.getRowModel().getRowById(id);
+      return engine.getRowNode(id);
     },
     forEachNode(callback) {
-      engine.getRowModel().forEachNode(callback);
+      engine.forEachNode(callback);
     },
     getSelectedRows() {
       return engine.getSelectedRows();
@@ -206,11 +261,44 @@ function createGridApi<TData>(
     exportDataAsCsv(params) {
       engine.exportDataAsCsv(params);
     },
+    getDataAsCsv(params) {
+      return engine.getDataAsCsv(params);
+    },
+    applyTransaction(transaction) {
+      return engine.applyTransaction(transaction);
+    },
+    refreshInfiniteCache() {
+      engine.refreshInfiniteCache();
+    },
+    purgeInfiniteCache() {
+      engine.purgeInfiniteCache();
+    },
+    getInfiniteRowCount() {
+      return engine.getInfiniteRowCount();
+    },
+    isLastRowIndexKnown() {
+      return engine.isLastRowIndexKnown();
+    },
     getSortModel() {
       return engine.getSortModel();
     },
     setSortModel(model) {
       engine.setSortModel(model);
+    },
+    selectAll() {
+      engine.selectAll();
+    },
+    deselectAll() {
+      engine.deselectAll();
+    },
+    addEventListener(type, listener) {
+      engine.getEventBus().on(type, listener as EventHandler);
+    },
+    removeEventListener(type, listener) {
+      engine.getEventBus().off(type, listener as EventHandler);
+    },
+    onFilterChanged(listener) {
+      return engine.getEventBus().on("filterChanged", listener as EventHandler);
     },
     destroy() {
       destroyFn();
@@ -237,6 +325,7 @@ function toRenderColumn<TData>(
     filterType,
     filterActive: filterType ? isFilterModelEntryActive(filterModel[column.colId]) : false,
     floatingFilter: resolveFloatingFilter(merged, defaultColDef),
+    filterParams: merged.filterParams,
   };
 }
 
@@ -258,6 +347,8 @@ export class GridEngine<TData = unknown> {
   private rowModelStages: RowModelStage[] = [];
   private sortController: SortControllerLike | null = null;
   private filterController: FilterControllerLike | null = null;
+  private infiniteRowModel: InfiniteRowModelLike<TData> | null = null;
+  private infiniteController: InfiniteRowModelControllerLike | null = null;
   private cellRendererRegistry = new Map<string, CellRendererFn<TData>>();
   private frameworkCellRenderers = new Set<string | CellRendererFn<TData>>();
   private lastBodyFocusedCell: CellPosition | null = null;
@@ -325,8 +416,59 @@ export class GridEngine<TData = unknown> {
     return this.eventBus;
   }
 
+  private hasActiveModule(moduleName: string): boolean {
+    return this.activeModules.some((mod) => mod.name === moduleName);
+  }
+
+  dispatchGridEvent<K extends keyof GridEventCallbackMap>(
+    type: K,
+    event: GridEventCallbackMap[K],
+  ): void {
+    this.eventBus.emit(type, event);
+    const optionKey = GRID_EVENT_OPTION_KEYS[type];
+    const handler = this.options[optionKey];
+    if (typeof handler === "function") {
+      (handler as (event: GridEventCallbackMap[K]) => void)(event);
+    }
+  }
+
+  private emitGridEvent<K extends keyof GridEventCallbackMap>(
+    type: K,
+    event: GridEventCallbackMap[K],
+  ): void {
+    this.dispatchGridEvent(type, event);
+  }
+
+  toggleRowSelectionByKeyboard(rowId: string): void {
+    const selection = this.store.getState().selection;
+    if (!selection || selection.mode !== "multiRow") return;
+
+    const prev = selection;
+    const next = toggleRowSelection(selection, rowId);
+    if (!selectionChanged(prev, next)) return;
+
+    this.store.dispatch({ type: "SET_SELECTION", selection: next });
+    this.emitGridEvent("selectionChanged", { api: this.api, source: "spaceKey" });
+  }
+
+  getRowIdAtDisplayIndex(rowIndex: number): string | undefined {
+    return this.getActiveRowAt(rowIndex)?.id;
+  }
+
   getRowModel(): ClientSideRowModel<TData> {
     return this.rowModel;
+  }
+
+  getDisplayedRowCount(): number {
+    return this.getActiveRowCount();
+  }
+
+  getRowNode(id: string): RowNode<TData> | undefined {
+    return this.getActiveRowById(id);
+  }
+
+  forEachNode(callback: (node: RowNode<TData>) => void): void {
+    this.forEachActiveNode(callback);
   }
 
   getColumnModel(): ColumnModel<TData> {
@@ -357,9 +499,73 @@ export class GridEngine<TData = unknown> {
     this.filterController = controller;
   }
 
+  setInfiniteRowModel(model: InfiniteRowModelLike<TData> | null): void {
+    this.infiniteRowModel = model;
+  }
+
+  setInfiniteRowModelController(controller: InfiniteRowModelControllerLike | null): void {
+    this.infiniteController = controller;
+  }
+
+  getInfiniteRowModelController(): InfiniteRowModelControllerLike | null {
+    return this.infiniteController;
+  }
+
+  private usesInfiniteRowModel(): boolean {
+    return this.infiniteRowModel != null;
+  }
+
+  private getActiveRowCount(): number {
+    return this.infiniteRowModel?.getRowCount() ?? this.rowModel.getRowCount();
+  }
+
+  private getActiveRowAt(index: number): RowNode<TData> | undefined {
+    return this.infiniteRowModel?.getRowAt(index) ?? this.rowModel.getRowAt(index);
+  }
+
+  private getActiveRowById(id: string): RowNode<TData> | undefined {
+    return this.infiniteRowModel?.getRowById(id) ?? this.rowModel.getRowById(id);
+  }
+
+  private forEachActiveNode(callback: (node: RowNode<TData>) => void): void {
+    if (this.infiniteRowModel) {
+      this.infiniteRowModel.forEachNode(callback);
+      return;
+    }
+    this.rowModel.forEachNode(callback);
+  }
+
+  private getExportNodes(onlySelected?: boolean): RowNode<TData>[] {
+    if (onlySelected) {
+      const selection = this.store.getState().selection;
+      if (!selection) return [];
+      const rows: RowNode<TData>[] = [];
+      if (this.infiniteRowModel) {
+        for (const id of selection.selectedRowIds) {
+          const node = this.infiniteRowModel.getRowById(id);
+          if (node) rows.push(node);
+        }
+        return rows;
+      }
+      this.forEachActiveNode((node) => {
+        if (selection.selectedRowIds.has(node.id)) rows.push(node);
+      });
+      return rows;
+    }
+    return this.infiniteRowModel?.getAllFilteredNodes() ?? this.rowModel.getAllFilteredNodes();
+  }
+
   rebuildRowModel(columns = this.store.getState().columns): void {
     const sortModel = readSortModel(columns);
     const filterModel = this.getFilterModel();
+    const quickFilterText = this.options.quickFilterText ?? "";
+
+    if (this.infiniteController) {
+      this.infiniteController.onSortOrFilterChanged(sortModel, filterModel, quickFilterText);
+      this.store.dispatch({ type: "SET_ROW_COUNT", rowCount: this.getActiveRowCount() });
+      return;
+    }
+
     this.rowModel.setFilterModel(filterModel);
     this.rowModel.rebuild(
       sortModel,
@@ -415,6 +621,8 @@ export class GridEngine<TData = unknown> {
     this.activeModules = [];
     this.sortController = null;
     this.filterController = null;
+    this.infiniteController = null;
+    this.infiniteRowModel = null;
   }
 
 
@@ -431,7 +639,7 @@ export class GridEngine<TData = unknown> {
     const top = scrollTop ?? state.scrollTop;
     const directional = overscanOverride ?? this.resolveDirectionalOverscan(top);
     return computeRowVirtualRange({
-      rowCount: this.rowModel.getRowCount(),
+      rowCount: this.getActiveRowCount(),
       rowHeight: this.rowHeight,
       scrollTop: top,
       viewportHeight: state.viewportHeight,
@@ -453,7 +661,7 @@ export class GridEngine<TData = unknown> {
     const state = this.store.getState();
     const directional = overscan ?? this.resolveDirectionalOverscan(scrollTop);
     const virtualRange = computeRowVirtualRange({
-      rowCount: this.rowModel.getRowCount(),
+      rowCount: this.getActiveRowCount(),
       rowHeight: this.rowHeight,
       scrollTop,
       viewportHeight: state.viewportHeight,
@@ -476,7 +684,7 @@ export class GridEngine<TData = unknown> {
 
     const rows: TData[] = [];
     for (const rowId of selection.selectedRowIds) {
-      const node = this.rowModel.getRowById(rowId);
+      const node = this.getActiveRowById(rowId);
       if (node?.data !== undefined) rows.push(node.data);
     }
     return rows;
@@ -489,6 +697,10 @@ export class GridEngine<TData = unknown> {
     (this.options as GridOptions<TData>)[key] = value;
 
     if (key === "rowData" && Array.isArray(value)) {
+      if (this.usesInfiniteRowModel()) {
+        console.warn("[ol-grid] rowData is ignored when rowModelType is 'infinite'");
+        return;
+      }
       this.rowModel.setRowData(value);
       this.rebuildRowModel();
       this.store.batch(() => {
@@ -564,6 +776,7 @@ export class GridEngine<TData = unknown> {
   }
 
   setFilterModel(model: Record<string, unknown> | null): void {
+    requireGridModule(this.hasActiveModule(FILTER_MODULE_NAME), FILTER_MODULE_NAME, "@ol-grid/filter");
     if (this.filterController) {
       this.filterController.setFilterModel(model, "api");
       return;
@@ -572,7 +785,7 @@ export class GridEngine<TData = unknown> {
     this.options.filterModel = next;
     this.store.dispatch({ type: "SET_FILTER_MODEL", filterModel: next });
     this.rebuildRowModel();
-    this.options.onFilterChanged?.({ api: this.api, source: "api" });
+    this.emitGridEvent("filterChanged", { api: this.api, source: "api" });
   }
 
   getFilterModel(): Record<string, unknown> {
@@ -580,6 +793,7 @@ export class GridEngine<TData = unknown> {
   }
 
   destroyFilter(colKey: string): void {
+    requireGridModule(this.hasActiveModule(FILTER_MODULE_NAME), FILTER_MODULE_NAME, "@ol-grid/filter");
     if (this.filterController) {
       this.filterController.destroyFilter(colKey);
       return;
@@ -592,9 +806,15 @@ export class GridEngine<TData = unknown> {
   openColumnFilter(colId: string): void {
     if (this.filterController) {
       this.filterController.openFilter(colId);
-      return;
+    } else {
+      this.store.dispatch({ type: "SET_OPEN_FILTER", openFilterColId: colId });
     }
-    this.store.dispatch({ type: "SET_OPEN_FILTER", openFilterColId: colId });
+    const column = this.columnModel.getByColId(colId);
+    this.emitGridEvent("filterOpened", {
+      api: this.api,
+      colId,
+      column: column?.def ?? null,
+    });
   }
 
   closeColumnFilter(): void {
@@ -633,11 +853,11 @@ export class GridEngine<TData = unknown> {
     this.rowModel.setQuickFilterText(text);
     this.rebuildRowModel();
     this.store.dispatch({ type: "SET_QUICK_FILTER", quickFilterText: text });
-    this.options.onFilterChanged?.({ api: this.api, source: "quickFilter" });
+    this.dispatchGridEvent("filterChanged", { api: this.api, source: "quickFilter" });
   }
 
   setFocusedCell(rowIndex: number, colId: string): void {
-    const rowCount = this.rowModel.getRowCount();
+    const rowCount = this.getActiveRowCount();
     if (rowCount === 0) return;
 
     const clampedRow = Math.max(0, Math.min(rowIndex, rowCount - 1));
@@ -680,7 +900,7 @@ export class GridEngine<TData = unknown> {
     rowIndex: number,
     position?: "top" | "middle" | "bottom",
   ): void {
-    const rowCount = this.rowModel.getRowCount();
+    const rowCount = this.getActiveRowCount();
     if (rowCount === 0) return;
 
     const state = this.store.getState();
@@ -732,7 +952,7 @@ export class GridEngine<TData = unknown> {
     const columns = this.getNavigableColumns();
     if (columns.length === 0) return;
 
-    const rowCount = this.rowModel.getRowCount();
+    const rowCount = this.getActiveRowCount();
     if (rowCount === 0) return;
 
     const current = state.focusedCell ?? { rowIndex: 0, colId: columns[0]!.colId };
@@ -766,7 +986,7 @@ export class GridEngine<TData = unknown> {
   tabNavigate(forward: boolean): void {
     const columns = this.getNavigableColumns();
     if (columns.length === 0) return;
-    const rowCount = this.rowModel.getRowCount();
+    const rowCount = this.getActiveRowCount();
     if (rowCount === 0) return;
 
     const current = this.store.getState().focusedCell;
@@ -823,7 +1043,7 @@ export class GridEngine<TData = unknown> {
     const columns = this.getNavigableColumns();
     if (columns.length === 0) return;
 
-    const rowCount = this.rowModel.getRowCount();
+    const rowCount = this.getActiveRowCount();
     if (rowCount === 0) return;
 
     if (this.lastBodyFocusedCell && this.isValidBodyCell(this.lastBodyFocusedCell)) {
@@ -841,7 +1061,7 @@ export class GridEngine<TData = unknown> {
   }
 
   private isValidBodyCell(cell: CellPosition): boolean {
-    const rowCount = this.rowModel.getRowCount();
+    const rowCount = this.getActiveRowCount();
     if (cell.rowIndex < 0 || cell.rowIndex >= rowCount) return false;
     return this.getNavigableColumns().some((col) => col.colId === cell.colId);
   }
@@ -868,6 +1088,7 @@ export class GridEngine<TData = unknown> {
 
   applyColumnState(params: ApplyColumnStateParams): boolean {
     const currentState = this.store.getState().columns;
+    const prevDisplayedIds = currentState.filter((col) => !col.hide).map((col) => col.colId);
     const { columns, success } = mergeColumnState(currentState, params);
 
     if (params.applyOrder && params.state?.length) {
@@ -880,6 +1101,12 @@ export class GridEngine<TData = unknown> {
     this.columnModel.setColumnState(columns);
     this.rebuildRowModel(columns);
     this.store.dispatch({ type: "SET_COLUMNS", columns });
+
+    const nextDisplayedIds = columns.filter((col) => !col.hide).map((col) => col.colId);
+    if (prevDisplayedIds.join("\0") !== nextDisplayedIds.join("\0")) {
+      this.emitGridEvent("displayedColumnsChanged", { api: this.api, source: "api" });
+    }
+
     return success;
   }
 
@@ -896,7 +1123,7 @@ export class GridEngine<TData = unknown> {
   }
 
   startEditingCell(rowIndex: number, colId: string): boolean {
-    const node = this.rowModel.getRowAt(rowIndex);
+    const node = this.getActiveRowAt(rowIndex);
     const column = this.columnModel.getByColId(colId);
     if (!node || !column || column.isSelectionColumn) return false;
 
@@ -960,8 +1187,8 @@ export class GridEngine<TData = unknown> {
       editing.activeCell,
       forward,
       this.getNavigableColumns(),
-      (rowIndex) => this.rowModel.getRowAt(rowIndex),
-      this.rowModel.getRowCount(),
+      (rowIndex) => this.getActiveRowAt(rowIndex),
+      this.getActiveRowCount(),
       this.api,
       this.options.context ?? null,
     );
@@ -1008,7 +1235,7 @@ export class GridEngine<TData = unknown> {
       }
     }
 
-    this.rowModel.forEachNode((node) => {
+    this.forEachActiveNode((node) => {
       const value = formatCellValue(
         getCellValue(node, column.def, this.api, this.options.context ?? null),
         node,
@@ -1027,16 +1254,55 @@ export class GridEngine<TData = unknown> {
     this.resizeColumn(colId, width, true);
   }
 
-  exportDataAsCsv(params?: { fileName?: string; columnSeparator?: string }): void {
-    const rows = this.rowModel.getAllFilteredNodes();
-    const csv = generateCsv(
+  exportDataAsCsv(params?: CsvExportParams): void {
+    downloadCsvContent(this.getDataAsCsv(params), params?.fileName ?? "export.csv");
+  }
+
+  getDataAsCsv(params?: CsvExportParams): string {
+    const rows = this.getExportNodes(params?.onlySelected);
+    return generateCsv(
       rows,
       this.getMergedColumnDefs(),
       this.api,
       this.options.context ?? null,
-      { columnSeparator: params?.columnSeparator },
+      resolveCsvExportOptions(params),
     );
-    downloadCsvContent(csv, params?.fileName ?? "export.csv");
+  }
+
+  applyTransaction(transaction: RowDataTransaction<TData>): RowDataTransactionResult<TData> {
+    if (this.usesInfiniteRowModel()) {
+      console.warn("[ol-grid] applyTransaction is not supported with infinite row model");
+      return { add: [], update: [], remove: [] };
+    }
+
+    const result = this.rowModel.applyTransaction(transaction);
+    this.rebuildRowModel();
+    this.store.batch(() => {
+      this.store.dispatch({ type: "SET_ROW_COUNT", rowCount: this.rowModel.getRowCount() });
+      this.store.dispatch({ type: "BUMP_ROW_DATA_VERSION" });
+    });
+    this.options.onRowDataUpdated?.({
+      api: this.api,
+      type: "transaction",
+      transaction,
+    });
+    return result;
+  }
+
+  refreshInfiniteCache(): void {
+    this.infiniteController?.refreshInfiniteCache();
+  }
+
+  purgeInfiniteCache(): void {
+    this.infiniteController?.purgeInfiniteCache();
+  }
+
+  getInfiniteRowCount(): number {
+    return this.infiniteController?.getInfiniteRowCount() ?? 0;
+  }
+
+  isLastRowIndexKnown(): boolean {
+    return this.infiniteController?.isLastRowIndexKnown() ?? true;
   }
 
   mount(host: HTMLElement, renderer: RendererAdapter): void {
@@ -1080,13 +1346,17 @@ export class GridEngine<TData = unknown> {
   }
 
   setSortModel(model: SortModel, source: "api" | "uiColumnSorted" = "api"): void {
+    requireGridModule(this.hasActiveModule(SORT_MODULE_NAME), SORT_MODULE_NAME, "@ol-grid/sort");
     if (this.sortController) {
       this.sortController.setSortModel(model, source);
       return;
     }
   }
 
-  handleRowClick(rowId: string, event: Pick<MouseEvent, "metaKey" | "ctrlKey">): void {
+  handleRowClick(
+    rowId: string,
+    event: Pick<MouseEvent, "metaKey" | "ctrlKey" | "shiftKey">,
+  ): void {
     const selection = this.store.getState().selection;
     if (!selection) return;
 
@@ -1094,12 +1364,14 @@ export class GridEngine<TData = unknown> {
     const next = handleRowClickSelection(selection, {
       rowId,
       multiSelect: event.metaKey || event.ctrlKey,
+      shiftRange: event.shiftKey,
+      displayedRowIds: this.getDisplayedRowIds(),
     });
 
     if (!selectionChanged(prev, next)) return;
 
     this.store.dispatch({ type: "SET_SELECTION", selection: next });
-    this.options.onSelectionChanged?.({ api: this.api, source: "rowClicked" });
+    this.emitGridEvent("selectionChanged", { api: this.api, source: "rowClicked" });
   }
 
   toggleRowCheckbox(rowId: string): void {
@@ -1111,7 +1383,7 @@ export class GridEngine<TData = unknown> {
     if (!selectionChanged(prev, next)) return;
 
     this.store.dispatch({ type: "SET_SELECTION", selection: next });
-    this.options.onSelectionChanged?.({ api: this.api, source: "checkboxClicked" });
+    this.emitGridEvent("selectionChanged", { api: this.api, source: "checkboxClicked" });
   }
 
   toggleHeaderCheckbox(): void {
@@ -1124,7 +1396,7 @@ export class GridEngine<TData = unknown> {
     if (!selectionChanged(prev, next)) return;
 
     this.store.dispatch({ type: "SET_SELECTION", selection: next });
-    this.options.onSelectionChanged?.({ api: this.api, source: "headerCheckboxClicked" });
+    this.emitGridEvent("selectionChanged", { api: this.api, source: "headerCheckboxClicked" });
   }
 
   selectAll(): void {
@@ -1136,7 +1408,7 @@ export class GridEngine<TData = unknown> {
     if (!selectionChanged(prev, next)) return;
 
     this.store.dispatch({ type: "SET_SELECTION", selection: next });
-    this.options.onSelectionChanged?.({ api: this.api, source: "selectAll" });
+    this.emitGridEvent("selectionChanged", { api: this.api, source: "selectAll" });
   }
 
   deselectAll(): void {
@@ -1148,12 +1420,12 @@ export class GridEngine<TData = unknown> {
     if (!selectionChanged(prev, next)) return;
 
     this.store.dispatch({ type: "SET_SELECTION", selection: next });
-    this.options.onSelectionChanged?.({ api: this.api, source: "deselectAll" });
+    this.emitGridEvent("selectionChanged", { api: this.api, source: "deselectAll" });
   }
 
   private getDisplayedRowIds(): string[] {
     const rowIds: string[] = [];
-    this.rowModel.forEachNode((node) => rowIds.push(node.id));
+    this.forEachActiveNode((node) => rowIds.push(node.id));
     return rowIds;
   }
 
@@ -1162,7 +1434,7 @@ export class GridEngine<TData = unknown> {
   }
 
   private commitEdit(cell: CellPosition, rawValue: string): boolean {
-    const node = this.rowModel.getRowAt(cell.rowIndex);
+    const node = this.getActiveRowAt(cell.rowIndex);
     const column = this.columnModel.getByColId(cell.colId);
     if (!node || !column) return false;
 
@@ -1272,13 +1544,17 @@ export class GridEngine<TData = unknown> {
 
     const directional = this.resolveDirectionalOverscan(state.scrollTop);
     const virtualRange = computeRowVirtualRange({
-      rowCount: this.rowModel.getRowCount(),
+      rowCount: this.getActiveRowCount(),
       rowHeight: this.rowHeight,
       scrollTop: state.scrollTop,
       viewportHeight: state.viewportHeight,
       overscanBefore: directional.overscanBefore,
       overscanAfter: directional.overscanAfter,
     });
+
+    if (this.infiniteRowModel) {
+      this.infiniteRowModel.ensureRangeLoaded(virtualRange.rowStart, virtualRange.rowEnd + 1);
+    }
 
     const frame = this.buildRenderFrame(state, virtualRange);
 
@@ -1330,7 +1606,7 @@ export class GridEngine<TData = unknown> {
     const rows: RenderFrame["rows"] = [];
     if (virtualRange.rowEnd >= virtualRange.rowStart) {
       for (let rowIndex = virtualRange.rowStart; rowIndex <= virtualRange.rowEnd; rowIndex++) {
-        const node = this.rowModel.getRowAt(rowIndex);
+        const node = this.getActiveRowAt(rowIndex);
         if (!node) continue;
         rows.push(this.buildRenderRow(node, columns, selectedRowIds, state.editing));
       }
@@ -1365,6 +1641,12 @@ export class GridEngine<TData = unknown> {
       filterModel,
       openFilterColId: state.openFilterColId,
       showFloatingFilters,
+      overlayLoading: !!state.rowModelMeta.loading,
+      overlayNoRows: this.getActiveRowCount() === 0 && !state.rowModelMeta.loading,
+      overlayError: state.rowModelMeta.error ?? null,
+      overlayLoadingTemplate: this.options.overlayLoadingTemplate,
+      overlayNoRowsTemplate: this.options.overlayNoRowsTemplate,
+      overlayErrorTemplate: this.options.overlayErrorTemplate,
     };
   }
 
@@ -1375,6 +1657,22 @@ export class GridEngine<TData = unknown> {
     editing: RenderFrame["editing"],
   ): RenderFrame["rows"][number] {
     const selected = selectedRowIds.includes(node.id);
+
+    if (node.stub) {
+      const failed = node.aggData?.failed === true;
+      return {
+        id: node.id,
+        rowIndex: node.rowIndex,
+        selected,
+        cells: columns.map((column) => ({
+          colId: column.colId,
+          value: failed ? "Error" : "",
+          isStub: true,
+          stubFailed: failed,
+        })),
+      };
+    }
+
     const cells = columns.map((column) => {
       if (column.isSelectionColumn) {
         return {

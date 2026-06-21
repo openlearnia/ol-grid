@@ -7,6 +7,7 @@ interface Person {
   department: string;
   location: string;
   startYear: number;
+  joinDate: string;
   salary: number;
   status: string;
 }
@@ -25,6 +26,7 @@ const rowData: Person[] = Array.from({ length: 1000 }, (_, index) => {
     department: departments[index % departments.length]!,
     location: locations[index % locations.length]!,
     startYear: 2015 + (index % 10),
+    joinDate: `${2015 + (index % 10)}-${String((index % 12) + 1).padStart(2, "0")}-15`,
     salary: 70000 + (index % 50) * 1500,
     status: statuses[index % statuses.length]!,
   };
@@ -46,9 +48,9 @@ const grid = createGrid<Person>(host, {
   stopEditingWhenCellsLoseFocus: true,
   columnDefs: [
     { field: "id", headerName: "ID", width: 72, pinned: "left" },
-    { field: "name", headerName: "Name", width: 140, pinned: "left", editable: true },
-    { field: "role", headerName: "Role", width: 120, editable: true },
-    { field: "department", headerName: "Department", width: 130 },
+    { field: "name", headerName: "Name", width: 140, pinned: "left", editable: true, filter: "text", floatingFilter: true },
+    { field: "role", headerName: "Role", width: 120, editable: true, filter: "text" },
+    { field: "department", headerName: "Department", width: 130, filter: "text", floatingFilter: true },
     { field: "location", headerName: "Location", width: 110 },
     {
       field: "startYear",
@@ -79,7 +81,7 @@ const grid = createGrid<Person>(host, {
     {
       field: "status",
       headerName: "Status",
-      width: 120,
+      flex: 1,
       editable: true,
       cellEditor: "select",
       cellEditorParams: { values: statuses },
@@ -116,7 +118,7 @@ const grid = createGrid<Person>(host, {
 
 function updateStatus(): void {
   if (!statusEl) return;
-  statusEl.textContent = `${grid.api.getDisplayedRowCount()} rows visible · ${grid.api.getSelectedRows().length} selected · double-click or Enter to edit · Tab between editable cells · salary min $30k`;
+  statusEl.textContent = `${grid.api.getDisplayedRowCount()} rows visible · ${grid.api.getSelectedRows().length} selected · Name/Dept column filters · double-click or Enter to edit · Tab between editable cells · salary min $30k`;
 }
 
 (window as unknown as { grid: typeof grid }).grid = grid;

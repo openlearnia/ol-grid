@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ol-grid — Infinite Row Model</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid #e2e8f0;
+        background: #fff;
+      }
+      .toolbar button {
+        padding: 6px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .layout {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        height: 100vh;
+      }
+      #grid-host {
+        min-height: 0;
+        padding: 16px;
+      }
+      #status {
+        margin-left: auto;
+        font-size: 13px;
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <div class="toolbar">
+        <strong>Infinite row model</strong>
+        <button type="button" id="refresh-cache">Refresh cache</button>
+        <button type="button" id="purge-cache">Purge cache</button>
+        <span id="status">Mock REST · 10,000 rows</span>
+      </div>
+      <div id="grid-host" class="ol-grid-host"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

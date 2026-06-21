@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@ol-grid/core";
 
-export type ProvidedCellEditorType = "text" | "number" | "select";
+export type ProvidedCellEditorType = "text" | "number" | "select" | "date" | "largeText";
 
 export interface CellEditorParams {
   value: string;
@@ -12,7 +12,9 @@ export interface CellEditorParams {
 
 export function resolveCellEditorType(colDef: ColumnDef): ProvidedCellEditorType {
   const editor = colDef.cellEditor;
-  if (editor === "number" || editor === "select") return editor;
+  if (editor === "number" || editor === "select" || editor === "date" || editor === "largeText") {
+    return editor;
+  }
   return "text";
 }
 
@@ -61,9 +63,26 @@ export function createCellEditorElement(params: CellEditorParams): HTMLElement {
     return select;
   }
 
+  if (type === "largeText") {
+    const textarea = document.createElement("textarea");
+    textarea.className = "ol-grid__cell-editor ol-grid__cell-editor--large-text";
+    textarea.value = params.value;
+    if (typeof editorParams.maxLength === "number") {
+      textarea.maxLength = editorParams.maxLength;
+    }
+    if (typeof editorParams.rows === "number") {
+      textarea.rows = editorParams.rows;
+    }
+    textarea.addEventListener("input", () => {
+      params.onValueChange(textarea.value);
+    });
+    attachEditorKeyHandlers(textarea, params);
+    return textarea;
+  }
+
   const input = document.createElement("input");
   input.className = "ol-grid__cell-editor";
-  input.type = type === "number" ? "number" : "text";
+  input.type = type === "number" ? "number" : type === "date" ? "date" : "text";
   input.value = params.value;
   if (type === "number") {
     if (typeof editorParams.min === "number") input.min = String(editorParams.min);
@@ -79,6 +98,9 @@ export function createCellEditorElement(params: CellEditorParams): HTMLElement {
 
 export function readEditorValue(element: HTMLElement): string {
   if (element instanceof HTMLSelectElement) {
+    return element.value;
+  }
+  if (element instanceof HTMLTextAreaElement) {
     return element.value;
   }
   if (element instanceof HTMLInputElement) {

@@ -7,10 +7,12 @@ import {
 } from "@ol-grid/core";
 import { SortModule } from "@ol-grid/sort";
 import { FilterModule } from "@ol-grid/filter";
+import { InfiniteRowModelModule } from "@ol-grid/infinite-row-model";
 import { createDomRenderer } from "@ol-grid/dom-renderer";
 
 let sortModuleRegistered = false;
 let filterModuleRegistered = false;
+let infiniteModuleRegistered = false;
 
 function ensureSortModuleRegistered(): void {
   if (sortModuleRegistered) return;
@@ -22,6 +24,12 @@ function ensureFilterModuleRegistered(): void {
   if (filterModuleRegistered) return;
   ModuleRegistry.register(FilterModule);
   filterModuleRegistered = true;
+}
+
+function ensureInfiniteModuleRegistered(): void {
+  if (infiniteModuleRegistered) return;
+  ModuleRegistry.register(InfiniteRowModelModule);
+  infiniteModuleRegistered = true;
 }
 
 export interface GridInstance<TData = unknown> {
@@ -36,9 +44,18 @@ export function createGrid<TData>(
 ): GridInstance<TData> {
   ensureSortModuleRegistered();
   ensureFilterModuleRegistered();
+  if (options.rowModelType === "infinite") {
+    ensureInfiniteModuleRegistered();
+  }
+
+  const defaultModules = [SortModule, FilterModule];
+  if (options.rowModelType === "infinite") {
+    defaultModules.push(InfiniteRowModelModule);
+  }
+
   const engine = createGridEngine({
     ...options,
-    modules: [...(options.modules ?? []), SortModule, FilterModule],
+    modules: [...(options.modules ?? []), ...defaultModules],
   });
   const renderer = createDomRenderer();
 

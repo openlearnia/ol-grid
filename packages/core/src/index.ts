@@ -3,7 +3,7 @@ import { EventBus } from "./events/event-bus.js";
 import { ModuleRegistry } from "./modules/module-registry.js";
 import { createGridStore } from "./store/grid-store.js";
 
-export type { GridApi, CsvExportParams, StartEditingCellParams } from "./types/api.js";
+export type { GridApi, CsvExportParams, StartEditingCellParams, ProcessCellForExportParams, ProcessHeaderForExportParams, RowDataTransaction, RowDataTransactionResult } from "./types/api.js";
 export type {
   ColumnDef,
   ColumnState,
@@ -23,12 +23,14 @@ export type {
   SelectionChangedEvent,
   SortChangedEvent,
   FilterChangedEvent,
+  FilterOpenedEvent,
+  DisplayedColumnsChangedEvent,
   CellValueChangedEvent,
   ColumnResizedEvent,
   RowDataUpdatedEvent,
   GridEvents,
 } from "./types/events.js";
-export type { GridOptions, GetRowIdParams, RowSelectionOption, SortModel } from "./types/options.js";
+export type { GridOptions, GetRowIdParams, RowSelectionOption, SortModel, InfiniteDatasource, InfiniteGetRowsParams } from "./types/options.js";
 export type {
   RendererAdapter,
   RenderFrame,
@@ -44,6 +46,8 @@ export type { GridContext } from "./modules/grid-context.js";
 
 export { GridEngine, createGridEngine };
 export { EventBus };
+export { OlGridError, requireGridModule } from "./errors/ol-grid-error.js";
+export type { GridEventMap, GridEventType } from "./events/grid-events.js";
 export { ModuleRegistry };
 export { createGridStore };
 export { createGridContext } from "./modules/grid-context.js";
@@ -55,6 +59,7 @@ export {
   isRowSelected,
   rowSelectionToMode,
   selectAllRows,
+  selectRowRange,
   toggleRowSelection,
   toggleSelectAll,
 } from "./selection/selection-manager.js";
@@ -62,7 +67,8 @@ export type { HeaderCheckboxState } from "./selection/selection-manager.js";
 export { SELECTION_COLUMN_ID } from "./column/column-model.js";
 export { resolveColId } from "./column/resolve-col-id.js";
 export { normalizeQuickFilterText, rowMatchesQuickFilter, filterRowsByQuickFilter } from "./filter/quick-filter.js";
-export { generateCsv, downloadCsvContent } from "./export/csv-export.js";
+export { generateCsv, downloadCsvContent, resolveCsvExportOptions } from "./export/csv-export.js";
+export { applyRowDataTransaction } from "./row/apply-transaction.js";
 export { isCellEditable } from "./row/is-cell-editable.js";
 export { setCellValue } from "./row/set-cell-value.js";
 export { commitCellEdit } from "./row/commit-cell-edit.js";
