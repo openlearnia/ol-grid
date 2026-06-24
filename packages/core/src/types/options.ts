@@ -1,4 +1,5 @@
 import type { ColumnDef } from "./column.js";
+import type { LocaleText } from "../locale/locale-text.js";
 import type { GridEvents } from "./events.js";
 import type { GridModule } from "../modules/module-registry.js";
 import type { RowModelType } from "./row.js";
@@ -48,9 +49,19 @@ export interface GridOptions<TData = unknown> extends GridEvents<TData> {
   gridId?: string;
   quickFilterText?: string;
   filterModel?: Record<string, unknown>;
+  /** Controlled selection: row ids currently selected. Omit for uncontrolled selection state. */
+  selectedRowIds?: string[];
   /** When true (default), blur / click outside commits the active edit. When false, cancels. */
   stopEditingWhenCellsLoseFocus?: boolean;
   modules?: GridModule[];
   /** Set by @ol-grid/react so function cellRenderer values use framework portals. */
   frameworkCellRenderers?: boolean;
+  /** BCP 47 locale tag for formatting and built-in UI strings. */
+  locale?: string;
+  /** Partial override of built-in UI strings (deep-merged over locale bundle). */
+  localeText?: Partial<LocaleText>;
+  /** Active locale bundle merged before localeText overrides. */
+  localeBundle?: Partial<LocaleText>;
+  /** Visual theme: light, dark, system (prefers-color-scheme), or custom data-ol-theme value. */
+  theme?: "light" | "dark" | "system" | string;
 }

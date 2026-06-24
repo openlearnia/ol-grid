@@ -1,5 +1,14 @@
 import type { RenderColumn } from "@ol-grid/core";
 import { createFilterIcon } from "./icons.js";
+import {
+  filterButtonTestId,
+  filterPopupClearTestId,
+  filterPopupInputSecondaryTestId,
+  filterPopupInputTestId,
+  filterPopupOperatorTestId,
+  filterPopupTestId,
+  floatingFilterTestId,
+} from "./test-ids.js";
 
 type FilterType = "text" | "number" | "date";
 
@@ -151,6 +160,7 @@ export function createFilterButton(colId: string, active: boolean): HTMLButtonEl
   button.className = "ol-grid__filter-button";
   button.dataset.filterButton = "true";
   button.dataset.colId = colId;
+  button.dataset.testid = filterButtonTestId(colId);
   button.setAttribute("aria-label", "Open filter");
   button.title = "Filter";
   button.replaceChildren(createFilterIcon());
@@ -178,6 +188,7 @@ export function mountFilterPopup(options: FilterPopupOptions): () => void {
   popup.className = "ol-grid__filter-popup";
   popup.dataset.filterPopup = "true";
   popup.dataset.colId = options.colId;
+  popup.dataset.testid = filterPopupTestId(options.colId);
   popup.setAttribute("role", "dialog");
   popup.setAttribute("aria-label", `Filter ${options.headerName}`);
 
@@ -189,6 +200,7 @@ export function mountFilterPopup(options: FilterPopupOptions): () => void {
   operator.className = "ol-grid__filter-popup-operator";
   operator.tabIndex = 0;
   operator.dataset.filterPopupControl = "true";
+  operator.dataset.testid = filterPopupOperatorTestId(options.colId);
   operator.setAttribute("aria-label", "Filter operator");
   for (const [value, label] of operatorOptions(options.filterType)) {
     const option = document.createElement("option");
@@ -204,6 +216,7 @@ export function mountFilterPopup(options: FilterPopupOptions): () => void {
   primary.value = readPrimaryValue(draft);
   primary.tabIndex = 0;
   primary.dataset.filterPopupControl = "true";
+  primary.dataset.testid = filterPopupInputTestId(options.colId);
   primary.setAttribute("aria-label", "Filter value");
 
   const secondary = document.createElement("input");
@@ -212,6 +225,7 @@ export function mountFilterPopup(options: FilterPopupOptions): () => void {
   secondary.value = readSecondaryValue(draft);
   secondary.tabIndex = 0;
   secondary.dataset.filterPopupControl = "true";
+  secondary.dataset.testid = filterPopupInputSecondaryTestId(options.colId);
   secondary.setAttribute("aria-label", "Filter second value");
   secondary.hidden = !needsSecondaryInput(draft);
 
@@ -221,6 +235,7 @@ export function mountFilterPopup(options: FilterPopupOptions): () => void {
   const clearBtn = document.createElement("button");
   clearBtn.type = "button";
   clearBtn.className = "ol-grid__filter-popup-clear";
+  clearBtn.dataset.testid = filterPopupClearTestId(options.colId);
   clearBtn.textContent = "Clear";
 
   actions.append(clearBtn);
@@ -327,6 +342,7 @@ export function createFloatingFilterInput(
   input.value = readPrimaryValue(draft);
   input.tabIndex = 0;
   input.dataset.floatingFilterInput = "true";
+  input.dataset.testid = floatingFilterTestId(column.colId);
   input.setAttribute("aria-label", `Floating filter ${column.headerName}`);
 
   const scheduleApply = () => {

@@ -74,6 +74,12 @@ export interface ColumnDef<TData = unknown, TValue = unknown> {
   floatingFilter?: boolean;
   editable?: boolean | ((params: EditableCallbackParams<TData>) => boolean);
   hide?: boolean;
+  children?: ColumnDef<TData>[];
+  groupId?: string;
+  suppressSizeToFit?: boolean;
+  suppressMovable?: boolean;
+  lockPosition?: boolean;
+  lockPinned?: boolean;
 
   valueGetter?: (params: ValueGetterParams<TData>) => TValue;
   valueParser?: (params: ValueParserParams<TData, TValue>) => TValue;

@@ -1,0 +1,22 @@
+{
+  "name": "@ol-grid/example-svelte",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "predev": "pnpm --filter @ol-grid/svelte... run build",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ol-grid/svelte": "workspace:*",
+    "@ol-grid/dom-renderer": "workspace:*"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "svelte": "^5.23.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2"
+  }
+}

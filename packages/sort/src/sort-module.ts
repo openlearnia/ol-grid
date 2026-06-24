@@ -1,5 +1,5 @@
 import type { GridContext, GridModule, GridOptions } from "@ol-grid/core";
-import { getCellValue, resolveColId } from "@ol-grid/core";
+import { flattenColumnDefs, getCellValue } from "@ol-grid/core";
 import {
   applySingleColumnSort,
   applySortModel,
@@ -20,7 +20,7 @@ function createSortStage(): import("@ol-grid/core").RowModelStage {
 
       const colId = ctx.sortModel[0]!.colId;
       const sort = ctx.sortModel[0]!.sort;
-      const colDef = ctx.columnDefs.find((def, index) => resolveColId(def, index) === colId);
+      const colDef = flattenColumnDefs(ctx.columnDefs).find((entry) => entry.colId === colId)?.def;
       if (!colDef) return rows;
 
       const field = colDef.field;

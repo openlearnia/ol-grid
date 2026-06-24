@@ -77,6 +77,10 @@ export interface GridApi<TData = unknown> {
   isLastRowIndexKnown(): boolean;
   getSortModel(): SortModel;
   setSortModel(model: SortModel): void;
+  autoSizeColumn(colKey: string, skipHeader?: boolean): void;
+  autoSizeColumns(colKeys: string[], skipHeader?: boolean): void;
+  autoSizeAllColumns(skipHeader?: boolean): void;
+  sizeColumnsToFit(width?: number): void;
   selectAll(): void;
   deselectAll(): void;
   addEventListener<T extends GridEventType>(

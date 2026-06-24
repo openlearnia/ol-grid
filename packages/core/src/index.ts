@@ -31,6 +31,13 @@ export type {
   GridEvents,
 } from "./types/events.js";
 export type { GridOptions, GetRowIdParams, RowSelectionOption, SortModel, InfiniteDatasource, InfiniteGetRowsParams } from "./types/options.js";
+export type { LocaleText, LocaleTextKey } from "./locale/locale-text.js";
+export { DEFAULT_LOCALE_TEXT } from "./locale/locale-text.js";
+export { mergeLocaleText } from "./locale/merge-locale-text.js";
+export { createLocaleResolver } from "./locale/get-locale-text.js";
+export { flattenColumnDefs, isColumnGroup } from "./column/flatten-column-defs.js";
+export { buildHeaderRows, hasColumnGroups } from "./column/build-header-rows.js";
+export type { RenderHeaderCell, RenderHeaderRow, HeaderRowsResult } from "./column/build-header-rows.js";
 export type {
   RendererAdapter,
   RenderFrame,

@@ -1,4 +1,5 @@
 import { OlGrid, type OlGridHandle, type OlGridProps } from "@ol-grid/react";
+import { localeEn } from "@ol-grid/locale-en";
 import { StrictMode, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -94,6 +95,7 @@ function App() {
   const [visibleCount, setVisibleCount] = useState(dataset.rowData.length);
   const [quickFilter, setQuickFilter] = useState("");
   const [lastEdit, setLastEdit] = useState("none");
+  const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
 
   const refreshCounts = useCallback(() => {
     setSelectedCount(gridRef.current?.api.getSelectedRows().length ?? 0);
@@ -124,6 +126,7 @@ function App() {
         <label>
           Dataset{" "}
           <select
+            data-testid="demo-dataset-select"
             value={datasetId}
             onChange={(event) => handleDatasetChange(event.target.value as DatasetId)}
           >
@@ -147,20 +150,33 @@ function App() {
           </select>
         </label>
         <label>
+          Theme{" "}
+          <select
+            data-testid="demo-theme-select"
+            value={theme}
+            onChange={(event) => setTheme(event.target.value as typeof theme)}
+          >
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="system">System</option>
+          </select>
+        </label>
+        <label>
           Quick filter{" "}
           <input
             type="search"
+            data-testid="demo-quick-filter"
             value={quickFilter}
             onChange={(event) => handleQuickFilterChange(event.target.value)}
             placeholder="Filter all columns…"
           />
         </label>
-        <button type="button" onClick={handleExport}>
+        <button type="button" data-testid="demo-export-csv" onClick={handleExport}>
           Export CSV
         </button>
         <span>{visibleCount} rows visible</span>
         <span>{selectedCount} row(s) selected</span>
-        <span>Column filters: Name (floating + menu), Role/Salary (menu) · Salary &gt; 80000 demo</span>
+        <span>Column groups: Organization · Timeline · size-to-fit via API</span>
         <span>Last edit: {lastEdit}</span>
         <span>Tab between editable cells · salary min $30k</span>
       </div>
@@ -173,6 +189,8 @@ function App() {
           rowData={dataset.rowData}
           rowSelection={selectionMode}
           quickFilterText={quickFilter}
+          theme={theme}
+          localeBundle={localeEn}
           onGridReady={refreshCounts}
           onSelectionChanged={refreshCounts}
           onFilterChanged={refreshCounts}

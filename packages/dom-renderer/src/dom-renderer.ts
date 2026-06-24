@@ -7,6 +7,7 @@ import type {
   RenderFrame,
   RendererAdapter,
 } from "@ol-grid/core";
+import type { RenderHeaderCell, RenderHeaderRow } from "@ol-grid/core";
 import { getCellValue, overscanForScrollIntent } from "@ol-grid/core";
 import themeCss from "./theme.css";
 import { renderCellContent } from "./cell-renderer.js";
@@ -26,6 +27,18 @@ import {
   type FilterModelEntry,
 } from "./filter-ui.js";
 import { createSortAscIcon, createSortDescIcon } from "./icons.js";
+import {
+  bodyCellTestId,
+  bodyViewportTestId,
+  centerViewportTestId,
+  gridTestId,
+  headerCellTestId,
+  headerCheckboxTestId,
+  headerGroupTestId,
+  rowCheckboxTestId,
+  rowTestId,
+  sortIndicatorTestId,
+} from "./test-ids.js";
 
 const THEME_STYLE_ID = "ol-grid-dom-theme";
 const KEYBOARD_LOG_PREFIX = "[ol-grid:keyboard]";
@@ -99,7 +112,7 @@ export class DomRenderer implements RendererAdapter {
   private headerCenter: HTMLElement | null = null;
   private headerPinnedRight: HTMLElement | null = null;
   private headerSpacer: HTMLElement | null = null;
-  private headerCenterRow: HTMLElement | null = null;
+  private headerCenterScroll: HTMLElement | null = null;
   private headerMain: HTMLElement | null = null;
   private floatingFilters: HTMLElement | null = null;
   private floatingPinnedLeft: HTMLElement | null = null;
@@ -170,6 +183,7 @@ export class DomRenderer implements RendererAdapter {
     }
 
     host.classList.add("ol-grid");
+    host.dataset.testid = gridTestId;
     host.setAttribute("role", "grid");
     host.tabIndex = 0;
     host.style.setProperty("--ol-grid-row-height", `${engine.getRowHeight()}px`);
@@ -186,19 +200,16 @@ export class DomRenderer implements RendererAdapter {
 
     const headerPinnedLeft = document.createElement("div");
     headerPinnedLeft.className = "ol-grid__header-pinned-left";
-    headerPinnedLeft.setAttribute("role", "row");
 
     const headerCenter = document.createElement("div");
     headerCenter.className = "ol-grid__header-center";
 
-    const headerCenterRow = document.createElement("div");
-    headerCenterRow.className = "ol-grid__header-row ol-grid__header-row--center";
-    headerCenterRow.setAttribute("role", "row");
-    headerCenter.appendChild(headerCenterRow);
+    const headerCenterScroll = document.createElement("div");
+    headerCenterScroll.className = "ol-grid__header-rows-scroll";
+    headerCenter.appendChild(headerCenterScroll);
 
     const headerPinnedRight = document.createElement("div");
     headerPinnedRight.className = "ol-grid__header-pinned-right";
-    headerPinnedRight.setAttribute("role", "row");
 
     const headerSpacer = document.createElement("div");
     headerSpacer.className = "ol-grid__layout-spacer";
@@ -244,6 +255,7 @@ export class DomRenderer implements RendererAdapter {
 
     const body = document.createElement("div");
     body.className = "ol-grid__body";
+    body.dataset.testid = bodyViewportTestId;
     body.setAttribute("role", "rowgroup");
 
     const bodyInner = document.createElement("div");
@@ -254,6 +266,7 @@ export class DomRenderer implements RendererAdapter {
 
     const centerScroll = document.createElement("div");
     centerScroll.className = "ol-grid__center-scroll";
+    centerScroll.dataset.testid = centerViewportTestId;
 
     const centerInner = document.createElement("div");
     centerInner.className = "ol-grid__center-inner";
@@ -309,7 +322,7 @@ export class DomRenderer implements RendererAdapter {
     this.headerCenter = headerCenter;
     this.headerPinnedRight = headerPinnedRight;
     this.headerSpacer = headerSpacer;
-    this.headerCenterRow = headerCenterRow;
+    this.headerCenterScroll = headerCenterScroll;
     this.floatingFilters = floatingFilters;
     this.floatingPinnedLeft = floatingPinnedLeft;
     this.floatingCenter = floatingCenter;
@@ -405,7 +418,7 @@ export class DomRenderer implements RendererAdapter {
     this.headerCenter = null;
     this.headerPinnedRight = null;
     this.headerSpacer = null;
-    this.headerCenterRow = null;
+    this.headerCenterScroll = null;
     this.headerMain = null;
     this.floatingFilters = null;
     this.floatingPinnedLeft = null;
@@ -438,7 +451,7 @@ export class DomRenderer implements RendererAdapter {
       !this.headerPinnedLeft ||
       !this.headerPinnedRight ||
       !this.headerCenter ||
-      !this.headerCenterRow ||
+      !this.headerCenterScroll ||
       !this.floatingFilters ||
       !this.floatingPinnedLeft ||
       !this.floatingCenter ||
@@ -480,10 +493,14 @@ export class DomRenderer implements RendererAdapter {
     this.centerInner.style.width = `${frame.centerWidth}px`;
     this.centerInner.style.height = `${frame.totalHeight}px`;
 
-    this.headerPinnedLeft.style.width = `${frame.pinnedLeftWidth}px`;
-    this.headerPinnedRight.style.width = `${frame.pinnedRightWidth}px`;
-    this.headerCenter.style.width = `${centerScrollWidth}px`;
-    this.headerCenterRow.style.width = `${frame.centerWidth}px`;
+    const totalHeaderHeight = frame.headerRowCount * frame.headerHeight;
+    this.host?.style.setProperty("--ol-grid-header-height", `${frame.headerHeight}px`);
+    this.host?.style.setProperty("--ol-grid-header-total-height", `${totalHeaderHeight}px`);
+
+    this.headerPinnedLeft!.style.width = `${frame.pinnedLeftWidth}px`;
+    this.headerPinnedRight!.style.width = `${frame.pinnedRightWidth}px`;
+    this.headerCenter!.style.width = `${centerScrollWidth}px`;
+    this.headerCenterScroll!.style.width = `${frame.centerWidth}px`;
     this.floatingFilters.hidden = !frame.showFloatingFilters;
     this.floatingPinnedLeft.style.width = `${frame.pinnedLeftWidth}px`;
     this.floatingPinnedRight.style.width = `${frame.pinnedRightWidth}px`;
@@ -493,9 +510,9 @@ export class DomRenderer implements RendererAdapter {
     this.syncFloatingFilterScroll();
     this.syncViewportScrollFromStore();
 
-    this.renderHeaderSection(this.headerPinnedLeft, frame.pinnedLeftColumns, frame);
-    this.renderHeaderSection(this.headerCenterRow, frame.centerColumns, frame);
-    this.renderHeaderSection(this.headerPinnedRight, frame.pinnedRightColumns, frame);
+    this.renderHeaderRows(this.headerPinnedLeft!, frame.pinnedLeftHeaderRows, frame, frame.pinnedLeftColumns);
+    this.renderHeaderRows(this.headerCenterScroll!, frame.centerHeaderRows, frame, frame.centerColumns, true);
+    this.renderHeaderRows(this.headerPinnedRight!, frame.pinnedRightHeaderRows, frame, frame.pinnedRightColumns);
     if (frame.showFloatingFilters) {
       this.renderFloatingFilterSection(this.floatingPinnedLeft, frame.pinnedLeftColumns, frame);
       this.renderFloatingFilterSection(this.floatingCenterRow, frame.centerColumns, frame);
@@ -553,6 +570,8 @@ export class DomRenderer implements RendererAdapter {
         this.centerScroll!.scrollLeft = scrollLeft;
         this.lastKnownDomScrollLeft = scrollLeft;
       });
+      this.syncHeaderScroll();
+      this.syncFloatingFilterScroll();
     }
   }
 
@@ -876,9 +895,9 @@ export class DomRenderer implements RendererAdapter {
   }
 
   private syncHeaderScroll(): void {
-    if (!this.headerCenterRow) return;
+    if (!this.headerCenterScroll) return;
     const scrollLeft = this.centerScroll?.scrollLeft ?? 0;
-    this.headerCenterRow.style.transform = `translate3d(-${scrollLeft}px, 0, 0)`;
+    this.headerCenterScroll.style.transform = `translate3d(-${scrollLeft}px, 0, 0)`;
   }
 
   private syncFloatingFilterScroll(): void {
@@ -1782,6 +1801,197 @@ export class DomRenderer implements RendererAdapter {
     });
   }
 
+  private renderHeaderRows(
+    container: HTMLElement,
+    rows: RenderHeaderRow[],
+    frame: RenderFrame,
+    columns: RenderColumn[],
+    isCenter = false,
+  ): void {
+    const focusedHeaderColId = frame.focusedHeaderColId;
+    const useGrid = frame.headerRowCount > 1;
+
+    if (useGrid) {
+      container.classList.add("ol-grid__header-grid");
+      container.style.display = "grid";
+      container.style.gridTemplateColumns = columns.map((column) => `${column.width}px`).join(" ");
+      container.style.gridTemplateRows = `repeat(${rows.length}, ${frame.headerHeight}px)`;
+
+      const nextChildren: HTMLElement[] = [];
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+        for (const cell of rows[rowIndex]!.cells) {
+          const el = this.createHeaderCellElement(
+            cell,
+            frame,
+            focusedHeaderColId,
+            rowIndex,
+            true,
+          );
+          this.applyHeaderCellGridPlacement(el, cell);
+          nextChildren.push(el);
+        }
+      }
+      container.replaceChildren(...nextChildren);
+      return;
+    }
+
+    container.classList.remove("ol-grid__header-grid");
+    container.style.removeProperty("display");
+    container.style.removeProperty("grid-template-columns");
+    container.style.removeProperty("grid-template-rows");
+
+    const rowElements = this.syncHeaderRowElements(container, rows.length, isCenter);
+
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      const rowEl = rowElements[rowIndex]!;
+      const headerRow = rows[rowIndex]!;
+      const nextChildren: HTMLElement[] = [];
+
+      for (const cell of headerRow.cells) {
+        nextChildren.push(
+          this.createHeaderCellElement(cell, frame, focusedHeaderColId, rowIndex, false),
+        );
+      }
+
+      rowEl.replaceChildren(...nextChildren);
+    }
+  }
+
+  private applyHeaderCellGridPlacement(el: HTMLElement, cell: RenderHeaderCell): void {
+    if (cell.gridColumn == null || cell.gridRow == null) return;
+
+    if (cell.colSpan && cell.colSpan > 1) {
+      el.style.gridColumn = `${cell.gridColumn} / span ${cell.colSpan}`;
+    } else {
+      el.style.gridColumn = String(cell.gridColumn);
+    }
+
+    if (cell.rowSpan && cell.rowSpan > 1) {
+      el.style.gridRow = `${cell.gridRow} / span ${cell.rowSpan}`;
+    } else {
+      el.style.gridRow = String(cell.gridRow);
+    }
+  }
+
+  private syncHeaderRowElements(
+    container: HTMLElement,
+    rowCount: number,
+    isCenter: boolean,
+  ): HTMLElement[] {
+    const rows: HTMLElement[] = [];
+    for (let i = 0; i < rowCount; i++) {
+      let row = container.children[i] as HTMLElement | undefined;
+      if (!row) {
+        row = document.createElement("div");
+        row.className = isCenter
+          ? "ol-grid__header-row ol-grid__header-row--center"
+          : "ol-grid__header-row";
+        row.setAttribute("role", "row");
+        container.appendChild(row);
+      }
+      rows.push(row);
+    }
+    while (container.children.length > rowCount) {
+      container.lastElementChild?.remove();
+    }
+    return rows;
+  }
+
+  private createHeaderCellElement(
+    cell: RenderHeaderCell,
+    frame: RenderFrame,
+    focusedHeaderColId: string | null,
+    rowIndex: number,
+    useGridLayout = false,
+  ): HTMLElement {
+    const el = document.createElement("div");
+    el.className = "ol-grid__header-cell";
+    el.setAttribute("role", "columnheader");
+    if (!useGridLayout) {
+      el.style.width = `${cell.width}px`;
+    }
+
+    if (cell.kind === "group") {
+      el.classList.add("ol-grid__header-cell--group");
+      if (cell.groupId) {
+        el.dataset.groupId = cell.groupId;
+        el.dataset.testid = headerGroupTestId(cell.groupId);
+      }
+      const label = document.createElement("span");
+      label.className = "ol-grid__header-label";
+      label.textContent = cell.headerName;
+      el.replaceChildren(label);
+      if (!useGridLayout && cell.rowSpan && cell.rowSpan > 1) {
+        el.style.height = `${cell.rowSpan * frame.headerHeight}px`;
+        el.classList.add("ol-grid__header-cell--row-span");
+      }
+      return el;
+    }
+
+    if (cell.kind === "selection") {
+      el.classList.add("ol-grid__header-cell--selection");
+      el.dataset.colId = "__selection__";
+      el.dataset.testid = headerCellTestId("__selection__");
+      el.replaceChildren(this.createHeaderCheckbox(frame.headerCheckboxState ?? "unchecked"));
+      if (!useGridLayout && cell.rowSpan && cell.rowSpan > 1) {
+        el.style.height = `${cell.rowSpan * frame.headerHeight}px`;
+        el.classList.add("ol-grid__header-cell--row-span");
+      }
+      return el;
+    }
+
+    el.dataset.colId = cell.colId ?? "";
+    if (cell.colId) el.dataset.testid = headerCellTestId(cell.colId);
+    el.dataset.sortable = String(cell.sortable ?? false);
+    el.classList.toggle("ol-grid__header-cell--sortable", !!cell.sortable);
+    el.classList.toggle("ol-grid__header-cell--pinned-left", cell.pinned === "left");
+    el.classList.toggle("ol-grid__header-cell--pinned-right", cell.pinned === "right");
+
+    if (!useGridLayout && cell.rowSpan && cell.rowSpan > 1) {
+      el.style.height = `${cell.rowSpan * frame.headerHeight}px`;
+      el.classList.add("ol-grid__header-cell--row-span");
+    }
+
+    const isFocused = focusedHeaderColId === cell.colId;
+    el.classList.toggle("ol-grid__header-cell--focused", isFocused);
+    el.tabIndex = isFocused ? 0 : -1;
+
+    if (cell.sort === "asc") {
+      el.setAttribute("aria-sort", "ascending");
+    } else if (cell.sort === "desc") {
+      el.setAttribute("aria-sort", "descending");
+    } else if (cell.sortable) {
+      el.setAttribute("aria-sort", "none");
+    }
+
+    const label = document.createElement("span");
+    label.className = "ol-grid__header-label";
+    label.textContent = cell.headerName;
+
+    const indicator = document.createElement("span");
+    indicator.className = "ol-grid__sort-indicator";
+    if (cell.colId) indicator.dataset.testid = sortIndicatorTestId(cell.colId);
+    if (cell.sort === "asc") {
+      indicator.appendChild(createSortAscIcon());
+    } else if (cell.sort === "desc") {
+      indicator.appendChild(createSortDescIcon());
+    }
+
+    const children: HTMLElement[] = [label, indicator];
+    if (cell.filterType && cell.colId) {
+      children.push(createFilterButton(cell.colId, !!cell.filterActive));
+    }
+
+    const resizeHandle = document.createElement("span");
+    resizeHandle.className = "ol-grid__resize-handle";
+    resizeHandle.dataset.resizeHandle = "true";
+    resizeHandle.setAttribute("aria-hidden", "true");
+    children.push(resizeHandle);
+
+    el.replaceChildren(...children);
+    return el;
+  }
+
   private renderHeaderSection(
     container: HTMLElement,
     columns: RenderColumn[],
@@ -1806,6 +2016,7 @@ export class DomRenderer implements RendererAdapter {
       }
 
       cell.dataset.colId = column.colId;
+      cell.dataset.testid = headerCellTestId(column.colId);
       cell.dataset.sortable = String(column.sortable);
       cell.style.width = `${column.width}px`;
       cell.classList.toggle("ol-grid__header-cell--sortable", column.sortable);
@@ -1841,6 +2052,7 @@ export class DomRenderer implements RendererAdapter {
 
       const indicator = document.createElement("span");
       indicator.className = "ol-grid__sort-indicator";
+      indicator.dataset.testid = sortIndicatorTestId(column.colId);
       if (column.sort === "asc") {
         indicator.appendChild(createSortAscIcon());
       } else if (column.sort === "desc") {
@@ -1976,6 +2188,7 @@ export class DomRenderer implements RendererAdapter {
       (rowEl, row, renderFrame, width) => {
         rowEl.dataset.rowId = row.id;
         rowEl.dataset.rowIndex = String(row.rowIndex);
+        rowEl.dataset.testid = rowTestId(row.rowIndex);
         rowEl.style.height = `${renderFrame.rowHeight}px`;
         rowEl.style.width = `${width}px`;
         rowEl.classList.toggle("ol-grid__row--selected", row.selected);
@@ -2048,6 +2261,7 @@ export class DomRenderer implements RendererAdapter {
 
       cellEl.style.width = `${column?.width ?? 0}px`;
       cellEl.dataset.colId = cell.colId;
+      cellEl.dataset.testid = bodyCellTestId(row.rowIndex, cell.colId);
       cellEl.classList.toggle("ol-grid__cell--selection", !!cell.isSelectionColumn);
 
       const isFocused = focused?.rowIndex === row.rowIndex && focused.colId === cell.colId;
@@ -2062,11 +2276,15 @@ export class DomRenderer implements RendererAdapter {
       cellEl.tabIndex = isFocused ? 0 : -1;
 
       if (cell.isSelectionColumn) {
-        const checkbox = cellEl.querySelector<HTMLInputElement>(".ol-grid__selection-checkbox");
+        let checkbox = cellEl.querySelector<HTMLInputElement>(".ol-grid__selection-checkbox");
         if (!checkbox) {
-          cellEl.replaceChildren(this.createCheckbox(row.selected));
-        } else if (checkbox.checked !== row.selected) {
-          checkbox.checked = row.selected;
+          cellEl.replaceChildren(this.createCheckbox(row.selected, row.rowIndex));
+          checkbox = cellEl.querySelector<HTMLInputElement>(".ol-grid__selection-checkbox");
+        } else {
+          if (checkbox.checked !== row.selected) {
+            checkbox.checked = row.selected;
+          }
+          checkbox.dataset.testid = rowCheckboxTestId(row.rowIndex);
         }
       } else if (cell.isStub) {
         cellEl.replaceChildren();
@@ -2362,14 +2580,15 @@ export class DomRenderer implements RendererAdapter {
     }
   }
 
-  private createCheckbox(checked: boolean): HTMLElement {
+  private createCheckbox(checked: boolean, rowIndex: number): HTMLElement {
     const input = document.createElement("input");
     input.type = "checkbox";
     input.className = "ol-grid__selection-checkbox";
     input.dataset.selectionCheckbox = "true";
+    input.dataset.testid = rowCheckboxTestId(rowIndex);
     input.checked = checked;
     input.tabIndex = -1;
-    input.setAttribute("aria-label", "Select row");
+    input.setAttribute("aria-label", this.frame?.localeText.selectRow ?? "Select Row");
     return input;
   }
 
@@ -2378,10 +2597,11 @@ export class DomRenderer implements RendererAdapter {
     input.type = "checkbox";
     input.className = "ol-grid__selection-checkbox ol-grid__selection-checkbox--header";
     input.dataset.headerSelectAll = "true";
+    input.dataset.testid = headerCheckboxTestId;
     input.checked = state === "checked";
     input.indeterminate = state === "indeterminate";
     input.tabIndex = -1;
-    input.setAttribute("aria-label", "Select all rows");
+    input.setAttribute("aria-label", this.frame?.localeText.selectAll ?? "Select All");
     return input;
   }
 }

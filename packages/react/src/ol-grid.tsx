@@ -58,7 +58,12 @@ const GRID_OPTION_KEYS = [
   "quickFilterText",
   "sortModel",
   "filterModel",
+  "selectedRowIds",
   "defaultColDef",
+  "theme",
+  "locale",
+  "localeText",
+  "localeBundle",
 ] as const satisfies readonly (keyof GridOptions<unknown>)[];
 
 type SyncedGridOptions<TData> = Partial<Pick<GridOptions<TData>, (typeof GRID_OPTION_KEYS)[number]>>;
@@ -106,6 +111,7 @@ export function useOlGrid<TData>(options: GridOptions<TData>): UseOlGridResult<T
 
   useEffect(() => {
     syncGridOptions(engine, options, syncedOptionsRef.current);
+    syncEventHandlers(engine, options);
   });
 
   useEffect(() => {
@@ -126,6 +132,22 @@ export function useOlGrid<TData>(options: GridOptions<TData>): UseOlGridResult<T
     grid: engine,
     api: engine.getApi(),
   };
+}
+
+function syncEventHandlers<TData>(engine: GridEngine<TData>, options: GridOptions<TData>): void {
+  const opts = engine.getOptions() as GridOptions<TData>;
+  opts.onSelectionChanged = options.onSelectionChanged;
+  opts.onSortChanged = options.onSortChanged;
+  opts.onRowDataUpdated = options.onRowDataUpdated;
+  opts.onFilterChanged = options.onFilterChanged;
+  opts.onFilterOpened = options.onFilterOpened;
+  opts.onDisplayedColumnsChanged = options.onDisplayedColumnsChanged;
+  opts.onColumnResized = options.onColumnResized;
+  opts.onCellValueChanged = options.onCellValueChanged;
+  opts.onSortModelChange = options.onSortModelChange;
+  opts.onFilterModelChange = options.onFilterModelChange;
+  opts.onSelectionChange = options.onSelectionChange;
+  opts.onGridReady = options.onGridReady;
 }
 
 export const OlGrid = forwardRef(function OlGrid<TData>(
@@ -174,16 +196,7 @@ export const OlGrid = forwardRef(function OlGrid<TData>(
 
   useEffect(() => {
     syncGridOptions(engine, options, syncedOptionsRef.current);
-
-    const opts = engine.getOptions() as GridOptions<TData>;
-    opts.onSelectionChanged = options.onSelectionChanged;
-    opts.onSortChanged = options.onSortChanged;
-    opts.onRowDataUpdated = options.onRowDataUpdated;
-    opts.onFilterChanged = options.onFilterChanged;
-    opts.onFilterOpened = options.onFilterOpened;
-    opts.onDisplayedColumnsChanged = options.onDisplayedColumnsChanged;
-    opts.onColumnResized = options.onColumnResized;
-    opts.onCellValueChanged = options.onCellValueChanged;
+    syncEventHandlers(engine, options);
   });
 
   useEffect(() => {

@@ -2,6 +2,8 @@ export type DemoColumnDef = {
   id?: string;
   field?: string;
   headerName?: string;
+  groupId?: string;
+  children?: DemoColumnDef[];
   width?: number;
   minWidth?: number;
   flex?: number;
@@ -125,23 +127,35 @@ const employeeColumnDefs: DemoColumnDef[] = [
     filter: "text",
     floatingFilter: true,
   },
-  { field: "role", headerName: "Role", width: 120, editable: true, filter: "text" },
-  { field: "department", headerName: "Department", width: 130, filter: "text", floatingFilter: true },
-  { field: "location", headerName: "Location", width: 110 },
   {
-    field: "joinDate",
-    headerName: "Join date",
-    width: 110,
-    filter: "date",
+    headerName: "Organization",
+    groupId: "organization",
+    children: [
+      { field: "role", headerName: "Role", width: 120, editable: true, filter: "text" },
+      { field: "department", headerName: "Department", width: 130, filter: "text", floatingFilter: true },
+      { field: "location", headerName: "Location", width: 110 },
+    ],
   },
   {
-    field: "startYear",
-    headerName: "Start",
-    width: 90,
-    editable: true,
-    cellEditor: "number",
-    cellEditorParams: { min: 1990, max: 2030, step: 1 },
-    valueParser: ({ newValue }: { newValue: unknown }) => Number(newValue),
+    headerName: "Timeline",
+    groupId: "timeline",
+    children: [
+      {
+        field: "joinDate",
+        headerName: "Join date",
+        width: 110,
+        filter: "date",
+      },
+      {
+        field: "startYear",
+        headerName: "Start",
+        width: 90,
+        editable: true,
+        cellEditor: "number",
+        cellEditorParams: { min: 1990, max: 2030, step: 1 },
+        valueParser: ({ newValue }: { newValue: unknown }) => Number(newValue),
+      },
+    ],
   },
   {
     field: "salary",

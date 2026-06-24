@@ -1,8 +1,12 @@
 import { computeAutoColumnWidth } from "../column/auto-size-column.js";
 import { mergeColumnState } from "../column/apply-column-state.js";
+import { buildHeaderRows } from "../column/build-header-rows.js";
 import { ColumnModel } from "../column/column-model.js";
+import { flattenColumnDefs } from "../column/flatten-column-defs.js";
 import { mergeColumnDefs } from "../column/merge-column-defs.js";
 import { resolveColId } from "../column/resolve-col-id.js";
+import { createLocaleResolver } from "../locale/get-locale-text.js";
+import type { LocaleTextKey } from "../locale/locale-text.js";
 import { EventBus, type EventHandler } from "../events/event-bus.js";
 import type { GridEventMap, GridEventType } from "../events/grid-events.js";
 import { requireGridModule } from "../errors/ol-grid-error.js";
@@ -192,8 +196,8 @@ function applyInitialSortModel(
 let gridIdCounter = 0;
 
 function columnDefsToState<TData>(columnDefs: ColumnDef<TData>[] = []): ColumnState[] {
-  return columnDefs.map((def, index) => ({
-    colId: resolveColId(def, index),
+  return flattenColumnDefs(columnDefs).map(({ def, colId }) => ({
+    colId,
     width: def.flex != null && def.flex > 0 ? undefined : def.width ?? 150,
     hide: def.hide ?? false,
     pinned: def.pinned ?? null,
@@ -285,6 +289,18 @@ function createGridApi<TData>(
     setSortModel(model) {
       engine.setSortModel(model);
     },
+    autoSizeColumn(colKey, skipHeader) {
+      engine.autoSizeColumn(colKey, skipHeader);
+    },
+    autoSizeColumns(colKeys, skipHeader) {
+      engine.autoSizeColumns(colKeys, skipHeader);
+    },
+    autoSizeAllColumns(skipHeader) {
+      engine.autoSizeAllColumns(skipHeader);
+    },
+    sizeColumnsToFit(width) {
+      engine.sizeColumnsToFit(width);
+    },
     selectAll() {
       engine.selectAll();
     },
@@ -357,6 +373,7 @@ export class GridEngine<TData = unknown> {
     lastMovementTime: 0,
     direction: "none",
   };
+  private getLocaleText = createLocaleResolver();
 
   constructor(options: GridOptions<TData> = {}) {
     const gridId = options.gridId ?? `ol-grid-${++gridIdCounter}`;
@@ -383,6 +400,7 @@ export class GridEngine<TData = unknown> {
 
     this.api = createGridApi(this, () => this.destroy());
     this.initModules(options.modules ?? []);
+    this.refreshLocaleResolver();
 
     const selectionMode = rowSelectionToMode(options.rowSelection);
     const selection = selectionMode ? createSelectionState(selectionMode) : undefined;
@@ -393,7 +411,10 @@ export class GridEngine<TData = unknown> {
       this.store.dispatch({ type: "SET_ROW_COUNT", rowCount: 0 });
       this.store.dispatch({ type: "SET_COLUMNS", columns });
       if (selection) {
-        this.store.dispatch({ type: "SET_SELECTION", selection });
+        const initialSelection = options.selectedRowIds?.length
+          ? { ...selection, selectedRowIds: new Set(options.selectedRowIds) }
+          : selection;
+        this.store.dispatch({ type: "SET_SELECTION", selection: initialSelection });
       }
     });
 
@@ -429,6 +450,24 @@ export class GridEngine<TData = unknown> {
     const handler = this.options[optionKey];
     if (typeof handler === "function") {
       (handler as (event: GridEventCallbackMap[K]) => void)(event);
+    }
+    this.emitControlledSliceCallbacks(type);
+  }
+
+  private emitControlledSliceCallbacks(type: keyof GridEventCallbackMap): void {
+    if (type === "sortChanged") {
+      this.options.onSortModelChange?.(this.getSortModel());
+      return;
+    }
+    if (type === "filterChanged") {
+      this.options.onFilterModelChange?.({ ...this.getFilterModel() });
+      return;
+    }
+    if (type === "selectionChanged") {
+      const selection = this.store.getState().selection;
+      if (selection) {
+        this.options.onSelectionChange?.([...selection.selectedRowIds]);
+      }
     }
   }
 
@@ -772,7 +811,45 @@ export class GridEngine<TData = unknown> {
 
     if (key === "filterModel" && value && typeof value === "object") {
       this.setFilterModel(value as Record<string, unknown>);
+      return;
     }
+
+    if (key === "selectedRowIds" && Array.isArray(value)) {
+      this.applySelectedRowIdsFromProp(value);
+      return;
+    }
+
+    if (key === "locale" && typeof value === "string") {
+      this.syncThemeAttribute();
+      this.refreshLocaleResolver();
+      this.refresh();
+      return;
+    }
+
+    if (key === "localeText" || key === "localeBundle") {
+      this.refreshLocaleResolver();
+      this.refresh();
+      return;
+    }
+
+    if (key === "theme") {
+      this.syncThemeAttribute();
+      this.refresh();
+    }
+  }
+
+  private applySelectedRowIdsFromProp(rowIds: readonly string[]): void {
+    const selection = this.store.getState().selection;
+    if (!selection) return;
+
+    const next: SelectionState = {
+      ...selection,
+      selectedRowIds: new Set(rowIds),
+    };
+    if (!selectionChanged(selection, next)) return;
+
+    this.store.dispatch({ type: "SET_SELECTION", selection: next });
+    this.refresh();
   }
 
   setFilterModel(model: Record<string, unknown> | null): void {
@@ -1222,7 +1299,7 @@ export class GridEngine<TData = unknown> {
     });
   }
 
-  autoSizeColumn(colId: string): void {
+  autoSizeColumn(colId: string, skipHeader = false): void {
     const column = this.columnModel.getByColId(colId);
     if (!column || column.isSelectionColumn) return;
 
@@ -1247,11 +1324,61 @@ export class GridEngine<TData = unknown> {
     });
 
     const width = computeAutoColumnWidth(
-      column.def.headerName ?? column.colId,
+      skipHeader ? "" : (column.def.headerName ?? column.colId),
       cellValues,
       column.def.sortable !== false,
     );
     this.resizeColumn(colId, width, true);
+  }
+
+  autoSizeColumns(colIds: string[], skipHeader = false): void {
+    for (const colId of colIds) {
+      this.autoSizeColumn(colId, skipHeader);
+    }
+  }
+
+  autoSizeAllColumns(skipHeader = false): void {
+    for (const column of this.columnModel.getColumns()) {
+      if (!column.isSelectionColumn) {
+        this.autoSizeColumn(column.colId, skipHeader);
+      }
+    }
+  }
+
+  sizeColumnsToFit(width?: number): void {
+    const viewportWidth = width ?? this.store.getState().viewportWidth;
+    const columns = this.columnModel.sizeColumnsToFit(viewportWidth);
+    this.store.dispatch({ type: "SET_COLUMNS", columns });
+    this.options.onColumnResized?.({
+      colId: "",
+      width: viewportWidth,
+      api: this.api,
+      finished: true,
+    });
+  }
+
+  resolveLocaleText(key: LocaleTextKey, params?: Record<string, string | number>): string {
+    return this.getLocaleText(key, params);
+  }
+
+  private refreshLocaleResolver(): void {
+    this.getLocaleText = createLocaleResolver(
+      this.options.localeText,
+      this.options.localeBundle,
+    );
+  }
+
+  private syncThemeAttribute(): void {
+    if (!this.host) return;
+    const theme = this.options.theme ?? "light";
+    if (theme === "light") {
+      this.host.removeAttribute("data-ol-theme");
+    } else {
+      this.host.setAttribute("data-ol-theme", theme);
+    }
+    if (this.options.locale) {
+      this.host.setAttribute("lang", this.options.locale.split("-")[0] ?? "en");
+    }
   }
 
   exportDataAsCsv(params?: CsvExportParams): void {
@@ -1311,6 +1438,7 @@ export class GridEngine<TData = unknown> {
     }
     this.host = host;
     this.renderer = renderer;
+    this.syncThemeAttribute();
     this.storeUnsubscribe = this.store.subscribe(() => this.refresh());
     renderer.mount(host, this as GridEngine);
     this.fireGridReady();
@@ -1595,6 +1723,16 @@ export class GridEngine<TData = unknown> {
       this.filterController?.hasFloatingFilters() ??
       columns.some((column) => column.floatingFilter);
 
+    const includeSelection = this.columnModel.getPinnedLeftColumns().some((c) => c.isSelectionColumn);
+    const headerRows = buildHeaderRows({
+      columnDefs: this.getMergedColumnDefs(),
+      columns: this.columnModel.getColumns(),
+      filterModel,
+      defaultColDef,
+      includeSelectionColumn: includeSelection,
+      headerRowHeight: 32,
+    });
+
     const selectedRowIds = state.selection ? [...state.selection.selectedRowIds] : [];
 
     const displayedRowIds = this.getDisplayedRowIds();
@@ -1647,6 +1785,20 @@ export class GridEngine<TData = unknown> {
       overlayLoadingTemplate: this.options.overlayLoadingTemplate,
       overlayNoRowsTemplate: this.options.overlayNoRowsTemplate,
       overlayErrorTemplate: this.options.overlayErrorTemplate,
+      headerRowCount: headerRows.rowCount,
+      headerHeight: headerRows.headerHeight,
+      pinnedLeftHeaderRows: headerRows.pinnedLeft,
+      centerHeaderRows: headerRows.center,
+      pinnedRightHeaderRows: headerRows.pinnedRight,
+      localeText: {
+        selectRow: this.getLocaleText("selectRow"),
+        selectAll: this.getLocaleText("selectAll"),
+        openFilter: this.getLocaleText("openFilter"),
+        floatingFilter: this.getLocaleText("floatingFilter"),
+        noRowsToShow: this.getLocaleText("noRowsToShow"),
+        loadingOoo: this.getLocaleText("loadingOoo"),
+        errorLoading: this.getLocaleText("errorLoading"),
+      },
     };
   }
 

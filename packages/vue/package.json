@@ -1,0 +1,37 @@
+{
+  "name": "@ol-grid/vue",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@ol-grid/core": "workspace:*",
+    "@ol-grid/dom-renderer": "workspace:*",
+    "@ol-grid/filter": "workspace:*",
+    "@ol-grid/sort": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": ">=3.4"
+  },
+  "devDependencies": {
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.2",
+    "vue": "^3.5.13"
+  }
+}

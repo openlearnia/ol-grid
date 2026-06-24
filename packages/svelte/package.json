@@ -1,0 +1,40 @@
+{
+  "name": "@ol-grid/svelte",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "license": "MIT",
+  "svelte": "./dist/OlGrid.svelte",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/OlGrid.svelte",
+      "import": "./dist/index.js"
+    },
+    "./OlGrid.svelte": "./dist/OlGrid.svelte"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup && node ./scripts/copy-svelte.mjs",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@ol-grid/core": "workspace:*",
+    "@ol-grid/dom-renderer": "workspace:*",
+    "@ol-grid/filter": "workspace:*",
+    "@ol-grid/sort": "workspace:*"
+  },
+  "peerDependencies": {
+    "svelte": ">=4"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "svelte": "^5.23.0",
+    "svelte-check": "^4.1.5",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.2"
+  }
+}

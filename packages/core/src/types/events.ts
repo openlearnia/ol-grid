@@ -1,6 +1,7 @@
 import type { ColumnDef } from "./column.js";
 import type { GridApi } from "./api.js";
 import type { RowNode } from "./row.js";
+import type { SortModel } from "./options.js";
 
 export interface GridReadyEvent<TData = unknown> {
   api: GridApi<TData>;
@@ -77,5 +78,11 @@ export interface GridEvents<TData = unknown> {
   onFilterOpened?: (event: FilterOpenedEvent) => void;
   onDisplayedColumnsChanged?: (event: DisplayedColumnsChangedEvent) => void;
   onColumnResized?: (event: ColumnResizedEvent) => void;
-  onRowDataUpdated?: (event: RowDataUpdatedEvent) => void;
+  onRowDataUpdated?: (event: RowDataUpdatedEvent<TData>) => void;
+  /** Controlled mode: fires when sort model changes from UI or API. */
+  onSortModelChange?: (sortModel: SortModel) => void;
+  /** Controlled mode: fires when filter model changes from UI or API. */
+  onFilterModelChange?: (filterModel: Record<string, unknown>) => void;
+  /** Controlled mode: fires when selected row ids change from UI or API. */
+  onSelectionChange?: (selectedRowIds: string[]) => void;
 }

@@ -1,0 +1,23 @@
+{
+  "name": "@ol-grid/example-vue",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "predev": "pnpm --filter @ol-grid/vue... run build",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ol-grid/vue": "workspace:*",
+    "@ol-grid/dom-renderer": "workspace:*",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2",
+    "vue-tsc": "^2.2.8"
+  }
+}

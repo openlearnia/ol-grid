@@ -1,4 +1,5 @@
 import type { GridEngine } from "../engine/grid-engine.js";
+import type { RenderHeaderRow } from "../column/build-header-rows.js";
 
 export interface CellPosition {
   rowIndex: number;
@@ -80,6 +81,12 @@ export interface RenderFrame {
   overlayLoadingTemplate?: string;
   overlayNoRowsTemplate?: string;
   overlayErrorTemplate?: string;
+  headerRowCount: number;
+  headerHeight: number;
+  pinnedLeftHeaderRows: RenderHeaderRow[];
+  centerHeaderRows: RenderHeaderRow[];
+  pinnedRightHeaderRows: RenderHeaderRow[];
+  localeText: Record<string, string>;
 }
 
 export interface RendererAdapter {

@@ -1,5 +1,5 @@
 import type { ColumnDef, ColumnState } from "../types/column.js";
-import { resolveColId } from "./resolve-col-id.js";
+import { flattenColumnDefs } from "./flatten-column-defs.js";
 
 const DEFAULT_WIDTH = 150;
 const MIN_WIDTH = 50;
@@ -126,12 +126,63 @@ export class ColumnModel<TData = unknown> {
     return this.columnState;
   }
 
+  sizeColumnsToFit(viewportWidth?: number): ColumnState[] {
+    const vp = viewportWidth ?? this.viewportWidth;
+    if (vp <= 0) return this.columnState;
+
+    const centerColIds = this.centerColumns
+      .filter((col) => !col.def.flex && col.def.suppressSizeToFit !== true)
+      .map((col) => col.colId);
+
+    if (centerColIds.length === 0) return this.columnState;
+
+    const pinnedLeftWidth = this.pinnedLeftColumns.reduce((sum, col) => sum + col.width, 0);
+    const pinnedRightWidth = this.pinnedRightColumns.reduce((sum, col) => sum + col.width, 0);
+    const available = Math.max(0, vp - pinnedLeftWidth - pinnedRightWidth);
+
+    const currentTotal = centerColIds.reduce((sum, colId) => {
+      const col = this.getByColId(colId);
+      return sum + (col?.width ?? DEFAULT_WIDTH);
+    }, 0);
+
+    if (currentTotal <= 0) return this.columnState;
+
+    const scale = available / currentTotal;
+    const stateByColId = new Map(this.columnState.map((state) => [state.colId, state]));
+
+    this.columnState = this.columns
+      .filter((col) => !col.isSelectionColumn)
+      .map((column) => {
+        const existing = stateByColId.get(column.colId);
+        const base: ColumnState = existing ?? {
+          colId: column.colId,
+          width: column.width,
+          pinned: column.pinned,
+          sort: column.sort,
+          sortIndex: column.sortIndex,
+        };
+
+        if (!centerColIds.includes(column.colId)) return base;
+
+        const minWidth = column.def.minWidth ?? MIN_WIDTH;
+        const maxWidth = column.def.maxWidth;
+        let nextWidth = Math.max(minWidth, Math.round(column.width * scale));
+        if (maxWidth !== undefined) {
+          nextWidth = Math.min(nextWidth, maxWidth);
+        }
+        return { ...base, width: nextWidth };
+      });
+
+    this.rebuild();
+    return this.columnState;
+  }
+
   private rebuild(): void {
-    const entries = this.columnDefs
-      .map((def, index) => {
-        const colId = resolveColId(def, index);
+    const flat = flattenColumnDefs(this.columnDefs);
+    const entries = flat
+      .map(({ def, colId, leafIndex }) => {
         const state = this.columnState.find((col) => col.colId === colId);
-        return { def, index, colId, state };
+        return { def, index: leafIndex, colId, state };
       })
       .filter(({ def }) => !def.hide);
 

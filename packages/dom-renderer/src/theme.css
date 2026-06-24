@@ -3,15 +3,23 @@
   --ol-grid-font-size: 13px;
   --ol-grid-row-height: 32px;
   --ol-grid-header-height: 32px;
+  --ol-grid-header-total-height: 32px;
   --ol-grid-border-color: #e2e8f0;
   --ol-grid-header-bg: #f8fafc;
   --ol-grid-body-bg: #fff;
+  --ol-grid-background: #fff;
   --ol-grid-row-hover-bg: #f1f5f9;
   --ol-grid-row-selected-bg: #dbeafe;
   --ol-grid-cell-padding: 0 12px;
   --ol-grid-focus-ring: 0 0 0 2px #3b82f6;
   --ol-grid-text-color: #0f172a;
   --ol-grid-muted-color: #64748b;
+  --ol-grid-header-text-color: #0f172a;
+  --ol-grid-sort-indicator-color: #64748b;
+  --ol-grid-checkbox-accent: #2563eb;
+  --ol-grid-editor-border: #e2e8f0;
+  --ol-grid-overlay-bg: rgba(255, 255, 255, 0.72);
+  --ol-grid-error-color: #b91c1c;
   --ol-grid-pinned-left-width: 0px;
   --ol-grid-pinned-right-width: 0px;
 
@@ -23,7 +31,51 @@
   font-family: var(--ol-grid-font-family);
   font-size: var(--ol-grid-font-size);
   color: var(--ol-grid-text-color);
-  background: #fff;
+  background: var(--ol-grid-background);
+}
+
+[data-ol-theme="dark"] .ol-grid,
+.ol-grid--dark {
+  --ol-grid-border-color: #334155;
+  --ol-grid-header-bg: #1e293b;
+  --ol-grid-body-bg: #0f172a;
+  --ol-grid-background: #0f172a;
+  --ol-grid-row-hover-bg: #1e293b;
+  --ol-grid-row-selected-bg: #1e3a5f;
+  --ol-grid-text-color: #f1f5f9;
+  --ol-grid-muted-color: #94a3b8;
+  --ol-grid-header-text-color: #f1f5f9;
+  --ol-grid-sort-indicator-color: #94a3b8;
+  --ol-grid-checkbox-accent: #60a5fa;
+  --ol-grid-editor-border: #475569;
+  --ol-grid-overlay-bg: rgba(15, 23, 42, 0.85);
+  --ol-grid-error-color: #fca5a5;
+  --ol-grid-focus-ring: 0 0 0 2px #60a5fa;
+  color-scheme: dark;
+}
+
+[data-ol-theme="system"] .ol-grid {
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-ol-theme="system"] .ol-grid {
+    --ol-grid-border-color: #334155;
+    --ol-grid-header-bg: #1e293b;
+    --ol-grid-body-bg: #0f172a;
+    --ol-grid-background: #0f172a;
+    --ol-grid-row-hover-bg: #1e293b;
+    --ol-grid-row-selected-bg: #1e3a5f;
+    --ol-grid-text-color: #f1f5f9;
+    --ol-grid-muted-color: #94a3b8;
+    --ol-grid-header-text-color: #f1f5f9;
+    --ol-grid-sort-indicator-color: #94a3b8;
+    --ol-grid-checkbox-accent: #60a5fa;
+    --ol-grid-editor-border: #475569;
+    --ol-grid-overlay-bg: rgba(15, 23, 42, 0.85);
+    --ol-grid-error-color: #fca5a5;
+    --ol-grid-focus-ring: 0 0 0 2px #60a5fa;
+  }
 }
 
 .ol-grid__focus-sentinel {
@@ -185,7 +237,7 @@
 .ol-grid__header-pinned-left {
   flex: 0 0 auto;
   display: flex;
-  height: var(--ol-grid-header-height);
+  flex-direction: column;
   z-index: 3;
   background: var(--ol-grid-header-bg);
 }
@@ -193,7 +245,7 @@
 .ol-grid__header-pinned-right {
   flex: 0 0 auto;
   display: flex;
-  height: var(--ol-grid-header-height);
+  flex-direction: column;
   z-index: 3;
   background: var(--ol-grid-header-bg);
   border-left: 1px solid var(--ol-grid-border-color);
@@ -205,14 +257,45 @@
   min-width: 0;
 }
 
+.ol-grid__header-rows-scroll {
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+}
+
+.ol-grid__header-grid {
+  display: grid;
+  flex-direction: unset;
+}
+
+.ol-grid__header-grid .ol-grid__header-cell {
+  width: auto;
+  min-width: 0;
+}
+
 .ol-grid__header-row {
   display: flex;
   height: var(--ol-grid-header-height);
-  will-change: transform;
+  min-width: min-content;
 }
 
 .ol-grid__header-row--center {
   flex: 0 0 auto;
+  width: 100%;
+}
+
+.ol-grid__header-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ol-grid__header-cell--group {
+  justify-content: center;
+  font-weight: 600;
+  color: var(--ol-grid-header-text-color);
+  border-bottom: 1px solid var(--ol-grid-border-color);
 }
 
 .ol-grid__header-cell {
@@ -238,7 +321,7 @@
 }
 
 .ol-grid__header-cell--sortable:hover {
-  background: #eef2f7;
+  background: var(--ol-grid-row-hover-bg);
 }
 
 .ol-grid__header-cell--selection {
@@ -303,7 +386,7 @@
   position: relative;
   overflow: hidden;
   z-index: 2;
-  background: #fff;
+  background: var(--ol-grid-body-bg);
   border-right: 1px solid var(--ol-grid-border-color);
 }
 
@@ -313,7 +396,7 @@
   position: relative;
   overflow: hidden;
   z-index: 2;
-  background: #fff;
+  background: var(--ol-grid-body-bg);
   border-left: 1px solid var(--ol-grid-border-color);
 }
 
