@@ -37,6 +37,7 @@ export interface GridModule {
 
 const globalRegistry = new Map<string, GridModule>();
 
+/** Dependency-first ordering; throws on cycles or missing deps. */
 function topologicalSort(modules: GridModule[]): GridModule[] {
   const byName = new Map(modules.map((mod) => [mod.name, mod]));
   const visited = new Set<string>();
@@ -73,6 +74,7 @@ function mergeModules(global: GridModule[], perGrid: GridModule[] = []): GridMod
     merged.set(mod.name, mod);
   }
   for (const mod of perGrid) {
+    // Global ModuleRegistry.register() wins over per-grid duplicates.
     if (merged.has(mod.name)) {
       if (typeof process !== "undefined" && process.env?.NODE_ENV !== "production") {
         console.warn(`[ol-grid] Module "${mod.name}" already registered globally — keeping global instance`);

@@ -25,6 +25,7 @@ export function flattenColumnDefs<TData>(
       }
       const colId = resolveColId(def, leafIndex);
       result.push({ def, colId, leafIndex });
+      // Monotonic across the full tree — used when colId is omitted on a leaf def.
       leafIndex += 1;
     }
   };

@@ -47,6 +47,24 @@ export interface CsvExportParams {
 
 export type { RowDataTransaction, RowDataTransactionResult };
 
+/**
+ * Imperative grid API. Available from `onGridReady` and adapter refs.
+ *
+ * Some methods require optional modules (e.g. `setSortModel` → `SortModule`,
+ * `paginationGoToPage` → `PaginationModule`). Framework adapters register common modules.
+ *
+ * @typeParam TData - Row object shape.
+ *
+ * @example
+ * ```ts
+ * onGridReady: (event) => {
+ *   const api = event.api;
+ *   api.setSortModel([{ colId: "country", sort: "asc" }]);
+ *   api.paginationGoToPage(0);
+ *   api.exportDataAsCsv({ fileName: "export.csv" });
+ * }
+ * ```
+ */
 export interface GridApi<TData = unknown> {
   setGridOption<K extends keyof GridOptions<TData>>(
     key: K,

@@ -8,6 +8,7 @@ export function getFilterValue<TData>(
   api: unknown,
   context: unknown,
 ): unknown {
+  // filterValueGetter can supply a different value than the displayed cell value.
   if (colDef.filterValueGetter) {
     return colDef.filterValueGetter({
       data: node.data as TData,

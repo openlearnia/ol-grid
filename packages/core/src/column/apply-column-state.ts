@@ -28,6 +28,7 @@ export function mergeColumnState(
 
   let columns: ColumnState[];
   if (applyOrder && state.length > 0) {
+    // `state` array order becomes column order; unmatched cols keep relative tail order.
     const orderedIds = state.map((col) => col.colId).filter((colId) => stateById.has(colId));
     const remainingIds = currentState
       .map((col) => col.colId)

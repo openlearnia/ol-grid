@@ -61,6 +61,7 @@ function readDefaultOption(filterParams?: Record<string, unknown>): string | und
 }
 
 function modelToApply(model: FilterModelEntry): FilterModelEntry | null {
+  // Empty primary value removes the column from filterModel (inactive filter).
   if (readPrimaryValue(model) === "") return null;
   return model;
 }

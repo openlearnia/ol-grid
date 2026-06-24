@@ -13,6 +13,7 @@ export class ClientSideRowModel<TData = unknown> {
   private rowNodes: RowNode<TData>[] = [];
   private rowById = new Map<string, RowNode<TData>>();
   private sourceData: TData[] = [];
+  /** Post–quick-filter rows; module pipeline stages read/write from here. */
   private filteredNodes: RowNode<TData>[] = [];
   private quickFilterText = "";
   private filterModel: Record<string, unknown> = {};
@@ -47,6 +48,7 @@ export class ClientSideRowModel<TData = unknown> {
   }
 
   setPipelineStages(stages: RowModelStage[]): void {
+    // Lower `order` runs first (e.g. column filter before sort before pagination).
     this.pipelineStages = [...stages].sort((left, right) => left.order - right.order);
   }
 
@@ -92,6 +94,7 @@ export class ClientSideRowModel<TData = unknown> {
   }
 
   updateNodeData(node: RowNode<TData>): void {
+    // Keep rowById, displayed rows, filtered cache, and sourceData in sync after inline edit.
     this.rowById.set(node.id, node);
     const index = this.rowNodes.findIndex((n) => n.id === node.id);
     if (index >= 0) {
@@ -128,6 +131,7 @@ export class ClientSideRowModel<TData = unknown> {
     context: unknown,
   ): void {
     const baseNodes = this.sourceData.map((data, index) => this.createNode(data, index));
+    // Quick filter is core-owned; registered stages only see post-filter rows.
     this.filteredNodes = filterRowsByQuickFilter(
       baseNodes,
       columnDefs,
@@ -167,6 +171,7 @@ export class ClientSideRowModel<TData = unknown> {
   }
 
   private setNodes(nodes: RowNode<TData>[]): void {
+    // rowIndex always reflects displayed order after sort/filter/pagination.
     this.rowNodes = nodes.map((node, index) => ({ ...node, rowIndex: index }));
     this.rowById = new Map(this.rowNodes.map((node) => [node.id, node]));
   }

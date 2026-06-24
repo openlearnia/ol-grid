@@ -15,6 +15,7 @@ export function setCellValue<TData>(
   const oldValue = getCellValue(node, colDef, api, context);
 
   if (colDef.valueSetter) {
+    // Custom setter returns whether the underlying data actually changed.
     return colDef.valueSetter({
       data,
       newValue,

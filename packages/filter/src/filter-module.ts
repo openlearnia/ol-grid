@@ -14,6 +14,7 @@ export const FILTER_MODULE_NAME = "FilterModule";
 function createColumnFilterStage(): import("@ol-grid/core").RowModelStage {
   return {
     name: "columnFilter",
+    // Runs after core quick filter (pre-stage) and before sort (typ. 200) / pagination (300).
     order: 100,
     run(rows, ctx) {
       const filterModel = (ctx.filterModel ?? {}) as FilterModel;

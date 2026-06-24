@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RowNode } from "@ol-grid/core";
-import { compareValues } from "../compare-values.js";
+import { compareValues, compareSortKeys } from "../compare-values.js";
 import {
   applySingleColumnSort,
   applyAdditiveColumnSort,
@@ -42,6 +42,16 @@ describe("compareValues", () => {
     expect(compareValues("b", "a")).toBeGreaterThan(0);
     expect(compareValues(null, "a")).toBeLessThan(0);
   });
+
+  it("uses code-point string order by default", () => {
+    expect(compareSortKeys("a", "à")).toBeLessThan(0);
+    expect(compareSortKeys("b", "à")).toBeLessThan(0);
+  });
+
+  it("groups accented characters when accentedSort is enabled", () => {
+    expect(compareSortKeys("a", "à", true)).toBe(0);
+    expect(compareSortKeys("a", "b", true)).toBeLessThan(0);
+  });
 });
 
 describe("sortRowNodes", () => {
@@ -72,6 +82,19 @@ describe("sortRowNodes", () => {
     );
 
     expect(sorted.map((row) => row.id)).toEqual(["c", "a", "d", "b"]);
+  });
+
+  it("orders accented strings with accentedSort option", () => {
+    const rows = [
+      node("1", "a"),
+      node("2", "à"),
+      node("3", "b"),
+    ];
+    const defaultOrder = sortRowNodes(rows, "asc", (row) => row.data?.value);
+    expect(defaultOrder.map((row) => row.id)).toEqual(["1", "3", "2"]);
+
+    const accentedOrder = sortRowNodes(rows, "asc", (row) => row.data?.value, undefined, true);
+    expect(accentedOrder.map((row) => row.id)).toEqual(["1", "2", "3"]);
   });
 });
 

@@ -17,6 +17,7 @@ export function doesNumberFilterPass(value: unknown, model: NumberFilterModel): 
   }
 
   if (numeric === null) {
+    // Non-numeric cell values never pass an active number filter.
     return false;
   }
 

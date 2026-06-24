@@ -1,5 +1,11 @@
+export function computeAutoPageSize(viewportHeight: number, rowHeight: number): number {
+  if (rowHeight <= 0 || viewportHeight <= 0) return 1;
+  return Math.max(1, Math.floor(viewportHeight / rowHeight));
+}
+
 export function computeTotalPages(totalRows: number, pageSize: number): number {
   if (pageSize <= 0) return 1;
+  // Always at least one page so nav controls stay enabled when row count is 0.
   return Math.max(1, Math.ceil(totalRows / pageSize));
 }
 

@@ -3,8 +3,8 @@
 > **Authoritative product spec:** [REQUIREMENTS.md](./REQUIREMENTS.md)  
 > **Architecture:** [ARCHITECTURE.md](./ARCHITECTURE.md)  
 > **Feature specs:** [requirements/README.md](./requirements/README.md)  
-> **Last audited:** 2026-06-24 (Sprint 9 Vue/Svelte pagination parity)  
-> **Tests:** 235 passing · 235 total · 51 test files · **Packages shipped:** 11 (`core`, `dom-renderer`, `sort`, `filter`, `pagination`, `infinite-row-model`, `locale-en`, `react`, `vanilla`, `vue`, `svelte`)  
+> **Last audited:** 2026-06-24 (Sprint 9 sort polish: `postSortRows`, `accentedSort`, `paginationAutoPageSize`)  
+> **Tests:** 253 passing · 253 total · 52 test files · **Packages shipped:** 11 (`core`, `dom-renderer`, `sort`, `filter`, `pagination`, `infinite-row-model`, `locale-en`, `react`, `vanilla`, `vue`, `svelte`)  
 > **CI:** Node 24 · pnpm 11.8.0 · build · typecheck · test · bundle-size gate · axe-core (vanilla demo) — `perf-100k` manual only, not in CI
 
 ---
@@ -15,7 +15,7 @@
 |--------|-------|
 | **Current phase** | **Phase 1 — Foundation (MVP)** largely complete; **Phase 2 — Editing & Data** in progress (Sprints 1–7 done) |
 | **Tier 1 completion** | **~76%** (core T1 feature set + quality gates shipped; API docs + migration parity remain) |
-| **Tier 2 completion** | **~72%** (Sprint 9 multi-sort + client pagination done; drag reorder deferred; migration guide + TypeDoc remain) |
+| **Tier 2 completion** | **~78%** (Sprint 9 multi-sort + client pagination done; drag reorder deferred; migration guide draft + TypeDoc scaffold remain) |
 | **Tier 3 completion** | **~0%** (specs only) |
 | **Overall v1 scope** | **~32%** (weighted across T1–T3) |
 
@@ -23,7 +23,7 @@
 
 **Critical gaps before Tier 1 exit:** API docs (`GridOptions`, `GridApi`, Tier 1 events), AG Grid getting-started tutorial parity (≤20% mapping changes), 100k perf benchmark in CI.
 
-**Critical gaps before Tier 2 exit (Sprint 8–9):** column drag reorder (deferred), RTL + custom filter components, multi-column sort, client pagination, migration guide, TypeDoc.
+**Critical gaps before Tier 2 exit (Sprint 8–9):** column drag reorder (deferred), RTL + custom filter components, migration guide polish + per-method TypeDoc examples, visual regression baseline.
 
 ---
 
@@ -40,7 +40,7 @@
 | REQUIREMENTS.md | Done | Tiers, NFRs, exit criteria §8 |
 | ARCHITECTURE.md | Done | Layers, packages, phased roadmap §10 |
 | 30 feature requirement docs | Done | `requirements/*.md` + index |
-| CI / benchmarks / docs site | Partial | GitHub Actions: build, typecheck, test, bundle-size gate, axe-core on vanilla demo (Node 24, pnpm 11.8.0). `benchmarks/perf-100k` manual + `bundle-size.mjs` in CI. TypeDoc / docs site not started |
+| CI / benchmarks / docs site | Partial | GitHub Actions: build, typecheck, test, bundle-size gate, axe-core on vanilla demo (Node 24, pnpm 11.8.0). `benchmarks/perf-100k` manual + `bundle-size.mjs` in CI. TypeDoc scaffold (`pnpm docs` → `docs/api/`); docs site not started |
 
 ---
 
@@ -110,24 +110,24 @@ Target: canvas renderer, column virtualization, worker offload.
 | Feature | Tier | Requirement doc | Status | Key REQ gaps | Next actions | Package |
 |---------|------|-----------------|--------|--------------|--------------|---------|
 | Core engine | T1–T3 | [core-engine.md](./requirements/core-engine.md) | **Partial** | Pipeline plugin hooks; `columnApi` null; immutable CSRM mode | Expand `PluginHost`; expose `columnApi` stub | `@ol-grid/core` |
-| Grid API & events | T1–T3 | [grid-api-and-events.md](./requirements/grid-api-and-events.md) | **Partial** | TypeDoc; some T2/T3 API methods | Publish TypeDoc | `@ol-grid/core` |
+| Grid API & events | T1–T3 | [grid-api-and-events.md](./requirements/grid-api-and-events.md) | **Partial** | Per-method TypeDoc examples; some T2/T3 API methods | Complete TypeDoc examples; publish docs site | `@ol-grid/core` |
 | Plugin & module system | T1–T3 | [plugin-module-system.md](./requirements/plugin-module-system.md) | **Partial** | Per-grid module scope (MOD-REG-05–08); filter not lazy-loaded in all paths | Per-grid registry scope; document module registration | `@ol-grid/core`, `@ol-grid/*` |
 | Column model | T1–T2 | [column-model.md](./requirements/column-model.md) | **Partial** | Drag reorder deferred | Sprint 9+ drag reorder | `@ol-grid/core` |
 | Client-side row model | T1–T2 | [client-side-row-model.md](./requirements/client-side-row-model.md) | **Partial** | Immutable mode; formal multi-stage pipeline registry | Immutable CSRM option; pipeline stage registry | `@ol-grid/core` |
 | DOM renderer | T1–T3 | [dom-renderer.md](./requirements/dom-renderer.md) | **Partial** | Vue/Svelte cell-renderer portals; canvas companion DOM (T3) | Framework portal parity for Vue/Svelte | `@ol-grid/dom-renderer` |
 | Virtualization | T1–T3 | [virtualization.md](./requirements/virtualization.md) | **Partial** | Dynamic row height; column virt (T3) | `getRowHeight` cache (T2); column virt (T3) | `@ol-grid/core`, renderers |
-| Sorting | T1–T3 | [sorting.md](./requirements/sorting.md) | **Done** (T1+T2 multi) | SSRM pass-through (T3) | Worker offload (T3) | `@ol-grid/sort` |
+| Sorting | T1–T3 | [sorting.md](./requirements/sorting.md) | **Partial** (T1+T2 multi + `initialSort` + `postSortRows` + `accentedSort`) | SSRM pass-through (T3); worker offload (T3) | SSRM sort pass-through; worker offload | `@ol-grid/sort` |
 | Selection | T1–T2 | [selection.md](./requirements/selection.md) | **Done** (T1) | Cell range selection (T3) | Range selection module (Tier 3) | `@ol-grid/core` |
 | Keyboard navigation | T1–T3 | [keyboard-navigation.md](./requirements/keyboard-navigation.md) | **Done** (T1) | Tab between non-edit cells edge cases | Audit Tab vs edit-mode behavior | `@ol-grid/core`, dom-renderer |
 | Theming | T1–T2 | [theming.md](./requirements/theming.md) | **Partial** | Alpine theme package; separate `@ol-grid/themes`; full token audit | Split `theme.css`; add Alpine package | `@ol-grid/dom-renderer`, `@ol-grid/themes` |
 | Framework adapters | T1–T3 | [framework-adapters.md](./requirements/framework-adapters.md) | **Partial** | Angular/WC; Vue/Svelte cell-renderer portals | Sprint 15+ Angular/WC; Vue/Svelte portal parity | `@ol-grid/react`, `@ol-grid/vanilla`, `@ol-grid/vue`, `@ol-grid/svelte` |
 | Accessibility | T1–T3 | [accessibility.md](./requirements/accessibility.md) | **Partial** | Live regions; full WCAG AA audit; canvas companion DOM (T3) | Live region for async updates; manual audit | core + renderers |
 | Performance & bundle | T1–T3 | [performance-and-bundle.md](./requirements/performance-and-bundle.md) | **Partial** (bundle gate only) | 100k perf manual (`benchmarks/perf-100k`, not CI); 1M-row canvas (T3); perf regression CI (Should) | Add perf-100k to CI (Should); Sprint 19+ canvas | all packages |
-| AG Grid migration | T1–T3 | [ag-grid-migration.md](./requirements/ag-grid-migration.md) | **Not started** | No `@ol-grid/compat-ag-grid`; no migration guide | Sprint 9 migration guide draft | `@ol-grid/compat-ag-grid` (planned) |
+| AG Grid migration | T1–T3 | [ag-grid-migration.md](./requirements/ag-grid-migration.md) | **Partial** | No `@ol-grid/compat-ag-grid`; full ColDef matrix | Expand migration guide; compat shim | `@ol-grid/compat-ag-grid` (planned) |
 | Cell editing | T2 | [cell-editing.md](./requirements/cell-editing.md) | **Partial** | Custom/provided editor components; full validation UX | Custom editor host API; polish blur paths | core + dom (→ `@ol-grid/edit`) |
 | Filtering | T2–T3 | [filtering.md](./requirements/filtering.md) | **Done** (T2 core) | Custom filter components (T2); set filter (T3) | Custom filter host; set filter in Tier 3 | `@ol-grid/filter` |
 | Infinite row model | T2 | [infinite-row-model.md](./requirements/infinite-row-model.md) | **Done** | — | Pagination alternative (Sprint 9) | `@ol-grid/infinite-row-model` |
-| Pagination | T2 | [pagination.md](./requirements/pagination.md) | **Done** (T2 CSRM) | SSRM server pagination (T3); `paginationAutoPageSize` optional | `paginateChildRows` with grouping (T3) | `@ol-grid/pagination` |
+| Pagination | T2 | [pagination.md](./requirements/pagination.md) | **Done** (T2 CSRM) | SSRM server pagination (T3); `paginateChildRows` with grouping (T3) | `paginateChildRows` with grouping (T3) | `@ol-grid/pagination` |
 | Export (CSV/Excel) | T2–T3 | [export.md](./requirements/export.md) | **Done** (T2 CSV) | Excel module (T3) | `@ol-grid/excel-export` in Tier 3 | `@ol-grid/core` (CSV), `@ol-grid/excel-export` |
 | Internationalization | T2 | [internationalization.md](./requirements/internationalization.md) | **Partial** | `@ol-grid/locale-en` shipped; RTL; hard-coded strings in some paths | RTL in dom-renderer; audit remaining strings | `@ol-grid/locale-*` |
 | Clipboard | T2–T3 | [clipboard.md](./requirements/clipboard.md) | **Not started** | Ctrl+C/V; TSV/HTML; range selection dependency | Depends on range selection (T3); basic copy T2 | `@ol-grid/clipboard` |
@@ -303,8 +303,9 @@ Assuming **2-week sprints**, one engineer (scale tasks horizontally when team gr
 ### Sprint 9 — Tier 2 exit & docs
 - [x] Multi-column sort (T2-COL-05) — `sortIndex`, shift+click additive sort, `multiSortKey`/`suppressMultiSort`/`alwaysMultiSort`, multi-key pipeline, sort-order indicators + `aria-sort`
 - [x] Client pagination mode (T2-PG-01) — `@ol-grid/pagination` module, pipeline slice, footer panel, GridApi pagination methods, React/Vue/Svelte demo toggles
-- [ ] Migration guide draft (§8.2)
-- [ ] TypeDoc for `GridOptions` / `GridApi` (NFR-Q-04)
+- [x] `colDef.sort` / `colDef.initialSort` on grid init (REQ-SORT-18) — `extractInitialSortModelFromColumnDefs`, `SortDef` + multi-key `sortIndex`, `options.sortModel` wins when provided
+- [x] Migration guide draft (§8.2) — [docs/MIGRATION.md](./docs/MIGRATION.md): multi-sort, pagination, initialSort, column groups, test IDs
+- [x] TypeDoc scaffold for `GridOptions` / `GridApi` (NFR-Q-04) — `pnpm docs` → `docs/api/`; entry points for core + modules + adapters
 - [ ] Visual regression baseline (NFR-Q-03, Should)
 - [ ] **Tier 2 exit checklist** (§8.2 below)
 
@@ -338,7 +339,7 @@ Assuming **2-week sprints**, one engineer (scale tasks horizontally when team gr
 | React and vanilla examples run sorting, selection, virtualization on **100k rows** | **Partial** — `benchmarks/perf-100k` manual workspace (`pnpm --filter @ol-grid/benchmarks run perf:100k`); not in CI |
 | axe-core reports **zero critical** violations on default demo | **Done** — CI serves `examples/vanilla/dist` and runs `@axe-core/cli --exit` |
 | Bundle budget met (§5.2) — core ≤40 KB, react+dom+sort ≤80 KB gzip | **Done** — `pnpm --filter @ol-grid/benchmarks run bundle-size` in CI |
-| API docs cover `GridOptions`, `GridApi`, and all Tier 1 events | **Not started** |
+| API docs cover `GridOptions`, `GridApi`, and all Tier 1 events | **Partial** — TypeDoc scaffold (`pnpm docs`); per-method examples incomplete |
 | AG Grid getting-started tutorial reproducible with ≤20% API mapping changes | **Not started** |
 
 ### §8.2 Tier 2 exit criteria
@@ -349,7 +350,7 @@ Assuming **2-week sprints**, one engineer (scale tasks horizontally when team gr
 | Infinite row model demo against mock REST API | **Done** — `examples/infinite` with mock datasource |
 | Vue and Svelte examples at parity with React basic demo | **Done** — sort, select, quick filter, CSV, text/number/date column filters + floating filters, controlled `filterModel`, pagination toggle |
 | CSV export matches displayed (filtered/sorted) data | **Done** — uses `getAllFilteredNodes()` |
-| Migration guide published with side-by-side AG Grid ↔ ol-grid snippets | **Not started** |
+| Migration guide published with side-by-side AG Grid ↔ ol-grid snippets | **Partial** — [docs/MIGRATION.md](./docs/MIGRATION.md) draft (Sprint 9 scope); full ColDef matrix + compat shim remain |
 
 ### §8.3 Tier 3 exit criteria
 
@@ -404,7 +405,7 @@ Accurate snapshot of `packages/` for planners:
 | Area | Built | Not built / gaps |
 |------|-------|------------------|
 | **Packages** | `core`, `dom-renderer`, `sort`, `filter`, `pagination`, `infinite-row-model`, `locale-en`, `react`, `vanilla`, `vue`, `svelte` (11) | 14+ planned packages from ARCHITECTURE.md §5 (grouping, SSRM, clipboard, themes, …) |
-| **Sort** | `@ol-grid/sort` — toggle, compare, `comparator`, `setSortModel`/`getSortModel`, `aria-sort`, multi-column sort (shift+click, `sortIndex`), wired via `ModuleRegistry` | Worker offload (T3); SSRM pass-through (T3) |
+| **Sort** | `@ol-grid/sort` — toggle, compare, `comparator`, `setSortModel`/`getSortModel`, `aria-sort`, multi-column sort (shift+click, `sortIndex`), `colDef.sort`/`initialSort` on init, `postSortRows`, `accentedSort` | worker offload (T3); SSRM pass-through (T3) |
 | **Filter** | Quick filter in core; `@ol-grid/filter` — text/number/date, `setFilterModel`, header menu, floating row | Custom filter components (T2); set filter (T3) |
 | **Edit** | Text + number/select editors, dblclick, Enter/F2/Escape, Tab/Shift+Tab, `valueParser`, validation | Custom editor components; dedicated `@ol-grid/edit` package |
 | **Selection** | single/multi, checkbox col, Ctrl+click, header select-all, shift-range, `selectAll`/`deselectAll` API | Cell range selection (T3) |
@@ -414,9 +415,9 @@ Accurate snapshot of `packages/` for planners:
 | **CSV** | `generateCsv`, `exportDataAsCsv`, `getDataAsCsv`, filtered/sorted scope, export params | Excel (T3) |
 | **Overlays** | Loading, no-rows, error overlays in dom-renderer (overlay hidden bug fixed) | — |
 | **Controlled mode** | `sortModel`, `filterModel`, `rowSelection` in React/Vue/Svelte adapters | Additional state slices as needed |
-| **Tests** | 235 tests, 51 files (all passing) | Coverage << 90% target; no visual regression baseline |
+| **Tests** | 253 tests, 52 files (all passing) | Coverage << 90% target; no visual regression baseline |
 | **Examples** | React, vanilla, vue, svelte, infinite (mock REST) | 100k in `benchmarks/` manual only; Angular; Vue/Svelte lack column groups demo |
-| **CI** | Node 24, pnpm 11.8.0 — build, typecheck, test, bundle-size, axe-core | `perf-100k` not in CI; perf regression gate (Should); TypeDoc |
+| **CI** | Node 24, pnpm 11.8.0 — build, typecheck, test, bundle-size, axe-core | `perf-100k` not in CI; perf regression gate (Should); TypeDoc scaffold only |
 
 ---
 
@@ -433,3 +434,6 @@ Accurate snapshot of `packages/` for planners:
 | 2026-06-24 | Sprint 9: multi-column sort (`sortIndex`, shift+click, multi-key pipeline, indicators); `@ol-grid/pagination` CSRM module + panel + API; React demo pagination toggle; 233/233 tests |
 | 2026-06-24 | Vue/Svelte pagination parity: `PaginationModule` wired in adapters, pagination props + demo toggles, adapter tests; 235/235 tests |
 | 2026-06-24 | Vue/Svelte column-filter demo parity: text/number/date filters + floating filters, controlled `filterModel`, `localeBundle` prop sync; Vue adapter floating-filter test; 223/223 tests passing; §8.2 Vue/Svelte → Done |
+| 2026-06-24 | Sort polish: `colDef.sort` / `initialSort` on grid init (REQ-SORT-18), `SortDef` + multi-key `sortIndex`, unit + SortModule integration tests; 245/245 tests |
+| 2026-06-24 | Sort T2 polish: `postSortRows` callback (REQ-SORT-20), `accentedSort` locale collation (REQ-SORT-21); `paginationAutoPageSize` + viewport subscription; React `paginationPageSizeSelector` in `GRID_OPTION_KEYS`; 253/253 tests |
+| 2026-06-24 | Sprint 9 docs: [docs/MIGRATION.md](./docs/MIGRATION.md) draft, TypeDoc config (`pnpm docs`), `docs/README.md`, test-id exports from dom-renderer |

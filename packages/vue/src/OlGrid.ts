@@ -158,6 +158,7 @@ export const OlGrid = defineComponent({
 
     return () => {
       void storeVersion.value;
+      // storeVersion subscription forces render when engine state changes (engine is non-reactive).
       return h("div", {
         ref: hostRef,
         class: props.class ? `ol-grid-host ${props.class}` : "ol-grid-host",

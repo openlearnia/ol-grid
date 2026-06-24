@@ -37,6 +37,7 @@ pnpm build            # build all packages (turbo)
 pnpm dev              # run dev servers (examples)
 pnpm test             # run vitest
 pnpm typecheck        # typecheck all packages
+pnpm run docs         # generate API reference → docs/api/
 ```
 
 ## License

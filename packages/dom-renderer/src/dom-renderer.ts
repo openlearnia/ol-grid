@@ -120,6 +120,7 @@ function fillSortIndicator(
   if (sortedColumnCount > 1 && sortIndex != null && sort) {
     const order = document.createElement("span");
     order.className = "ol-grid__sort-order";
+    // 1-based priority badge — only shown when more than one column is sorted.
     order.textContent = String(sortIndex + 1);
     indicator.appendChild(order);
   }
@@ -328,6 +329,7 @@ export class DomRenderer implements RendererAdapter {
 
     const paginationPanel = document.createElement("div");
     paginationPanel.className = "ol-grid__pagination-host";
+    // Hidden until PaginationModule enables pagination on first render frame.
     paginationPanel.hidden = true;
     root.appendChild(paginationPanel);
 

@@ -12,6 +12,7 @@ let sortModuleRegistered = false;
 let filterModuleRegistered = false;
 let paginationModuleRegistered = false;
 
+/** Idempotent registration — adapters call this once per app, not per grid instance. */
 function ensureSortModuleRegistered(): void {
   if (sortModuleRegistered) return;
   ModuleRegistry.register(SortModule);

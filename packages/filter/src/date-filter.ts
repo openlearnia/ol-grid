@@ -25,6 +25,7 @@ function startOfDay(timestamp: number): number {
   return date.getTime();
 }
 
+/** Inclusive day boundaries — filter inputs are date-only strings from `<input type="date">`. */
 function endOfDay(timestamp: number): number {
   const date = new Date(timestamp);
   date.setHours(23, 59, 59, 999);

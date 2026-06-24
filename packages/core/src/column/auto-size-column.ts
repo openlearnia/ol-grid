@@ -5,6 +5,7 @@ const MIN_AUTO_WIDTH = 50;
 
 let measureCanvas: CanvasRenderingContext2D | null = null;
 
+/** Canvas text metrics mirror dom-renderer header/body font for auto-size parity. */
 function getMeasureContext(): CanvasRenderingContext2D | null {
   if (typeof document === "undefined") return null;
   if (!measureCanvas) {

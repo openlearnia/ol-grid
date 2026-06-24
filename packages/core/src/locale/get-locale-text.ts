@@ -5,6 +5,7 @@ export function createLocaleResolver(
   localeText?: Partial<LocaleText>,
   bundle?: Partial<LocaleText>,
 ): (key: LocaleTextKey, params?: Record<string, string | number>) => string {
+  // Priority: built-in defaults < localeBundle < localeText prop overrides.
   const catalog = mergeLocaleText(DEFAULT_LOCALE_TEXT, bundle, localeText) as Required<LocaleText>;
 
   return (key, params) => {

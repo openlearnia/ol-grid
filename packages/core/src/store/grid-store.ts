@@ -99,6 +99,7 @@ export function createGridStore(gridId: string): GridStore {
   let pendingNotify = false;
 
   function notify(): void {
+    // Coalesce subscriber updates during store.batch() — one paint per logical action.
     if (batchDepth > 0) {
       pendingNotify = true;
       return;

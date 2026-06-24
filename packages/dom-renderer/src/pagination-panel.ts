@@ -20,6 +20,7 @@ export function createPaginationPanel(
 
   const summary = document.createElement("span");
   summary.className = "ol-grid__pagination-summary";
+  // Runtime page is 0-based; UI shows 1-based page numbers.
   summary.textContent = `${frame.localeText.page ?? "Page"} ${pagination.page + 1} ${frame.localeText.of ?? "of"} ${pagination.totalPages} (${pagination.totalRows})`;
 
   const controls = document.createElement("div");
@@ -66,22 +67,26 @@ export function createPaginationPanel(
 
   const sizeLabel = document.createElement("label");
   sizeLabel.className = "ol-grid__pagination-size";
-  const sizeText = document.createElement("span");
-  sizeText.textContent = frame.localeText.pageSize ?? "Page Size";
-  const sizeSelect = document.createElement("select");
-  sizeSelect.className = "ol-grid__pagination-size-select";
-  for (const size of pagination.pageSizeSelector) {
-    const option = document.createElement("option");
-    option.value = String(size);
-    option.textContent = String(size);
-    option.selected = size === pagination.pageSize;
-    sizeSelect.appendChild(option);
+  if (!pagination.autoPageSize && pagination.pageSizeSelector.length > 0) {
+    const sizeText = document.createElement("span");
+    sizeText.textContent = frame.localeText.pageSize ?? "Page Size";
+    const sizeSelect = document.createElement("select");
+    sizeSelect.className = "ol-grid__pagination-size-select";
+    for (const size of pagination.pageSizeSelector) {
+      const option = document.createElement("option");
+      option.value = String(size);
+      option.textContent = String(size);
+      option.selected = size === pagination.pageSize;
+      sizeSelect.appendChild(option);
+    }
+    sizeSelect.addEventListener("change", () => {
+      handlers.onPageSizeChange(Number(sizeSelect.value));
+    });
+    sizeLabel.append(sizeText, sizeSelect);
+    nav.append(summary, controls, sizeLabel);
+  } else {
+    nav.append(summary, controls);
   }
-  sizeSelect.addEventListener("change", () => {
-    handlers.onPageSizeChange(Number(sizeSelect.value));
-  });
-  sizeLabel.append(sizeText, sizeSelect);
 
-  nav.append(summary, controls, sizeLabel);
   return nav;
 }

@@ -2,6 +2,7 @@ import { computeAutoColumnWidth } from "../column/auto-size-column.js";
 import { mergeColumnState } from "../column/apply-column-state.js";
 import { buildHeaderRows } from "../column/build-header-rows.js";
 import { ColumnModel } from "../column/column-model.js";
+import { extractInitialSortModelFromColumnDefs } from "../column/initial-sort.js";
 import { flattenColumnDefs } from "../column/flatten-column-defs.js";
 import { mergeColumnDefs } from "../column/merge-column-defs.js";
 import { resolveColId } from "../column/resolve-col-id.js";
@@ -95,7 +96,9 @@ interface PaginationControllerLike {
   beforeRowModelRebuild(): void;
   onRowModelRebuilt(): void;
   getPageSizeSelector(): number[];
+  isAutoPageSize(): boolean;
   shouldSuppressPanel(): boolean;
+  destroy?(): void;
   paginationGetCurrentPage(): number;
   paginationGetTotalPages(): number;
   paginationGetPageSize(): number;
@@ -197,6 +200,7 @@ function isFilterModelEntryActive(model: unknown): boolean {
 }
 
 function readSortModel(columns: ColumnState[]): SortModel {
+  // ColumnState is source of truth; sortIndex orders multi-sort entries.
   return columns
     .filter((column) => column.sort === "asc" || column.sort === "desc")
     .sort((left, right) => (left.sortIndex ?? 0) - (right.sortIndex ?? 0))
@@ -222,6 +226,7 @@ let gridIdCounter = 0;
 function columnDefsToState<TData>(columnDefs: ColumnDef<TData>[] = []): ColumnState[] {
   return flattenColumnDefs(columnDefs).map(({ def, colId }) => ({
     colId,
+    // Flex columns omit width in state — ColumnModel computes from flex + viewport.
     width: def.flex != null && def.flex > 0 ? undefined : def.width ?? 150,
     hide: def.hide ?? false,
     pinned: def.pinned ?? null,
@@ -437,8 +442,17 @@ export class GridEngine<TData = unknown> {
     const rowData = options.rowData ?? [];
     const mergedColumnDefs = this.getMergedColumnDefs();
     let columns = columnDefsToState(mergedColumnDefs);
-    if (options.sortModel?.length) {
-      columns = applyInitialSortModel(columns, options.sortModel);
+    if (options.sortModel !== undefined) {
+      if (options.sortModel.length > 0) {
+        columns = applyInitialSortModel(columns, options.sortModel);
+      }
+    } else {
+      // No explicit sortModel: harvest sort / initialSort from column defs.
+      const initialSortModel = extractInitialSortModelFromColumnDefs(mergedColumnDefs);
+      if (initialSortModel.length > 0) {
+        columns = applyInitialSortModel(columns, initialSortModel);
+        this.options.sortModel = initialSortModel;
+      }
     }
     const quickFilterText = options.quickFilterText ?? "";
     const filterModel = options.filterModel ?? {};
@@ -660,6 +674,7 @@ export class GridEngine<TData = unknown> {
   }
 
   rebuildRowModel(columns = this.store.getState().columns): void {
+    // Pagination module may reset page before filter/sort stages run.
     this.paginationController?.beforeRowModelRebuild();
     const sortModel = readSortModel(columns);
     const filterModel = this.getFilterModel();
@@ -681,6 +696,7 @@ export class GridEngine<TData = unknown> {
       this.options.context ?? null,
     );
     this.store.dispatch({ type: "SET_ROW_COUNT", rowCount: this.rowModel.getRowCount() });
+    // Sync pagination store slice after totalRows / page clamp in the stage.
     this.paginationController?.onRowModelRebuilt();
   }
 
@@ -699,6 +715,7 @@ export class GridEngine<TData = unknown> {
     };
 
     const registerRowModelStage = (stage: RowModelStage) => {
+      // Modules may register dynamic stages at create time (beyond static rowModelStages).
       stages.push(stage);
     };
 
@@ -717,6 +734,7 @@ export class GridEngine<TData = unknown> {
   }
 
   private destroyModules(): void {
+    // Destroy in reverse registration order so dependents tear down before dependencies.
     for (let index = this.moduleContexts.length - 1; index >= 0; index--) {
       const mod = this.activeModules[index];
       const ctx = this.moduleContexts[index];
@@ -809,6 +827,7 @@ export class GridEngine<TData = unknown> {
 
     if (key === "columnDefs" && Array.isArray(value)) {
       const mergedColumnDefs = this.getMergedColumnDefs(value as ColumnDef<TData>[]);
+      // Rebuild column state from defs but keep the active sort model.
       const columns = applyInitialSortModel(
         columnDefsToState(mergedColumnDefs),
         readSortModel(this.store.getState().columns),
@@ -891,6 +910,16 @@ export class GridEngine<TData = unknown> {
 
     if (key === "theme") {
       this.syncThemeAttribute();
+      this.refresh();
+      return;
+    }
+
+    if (
+      key === "paginationPageSizeSelector" ||
+      key === "paginationAutoPageSize" ||
+      key === "pagination" ||
+      key === "suppressPaginationPanel"
+    ) {
       this.refresh();
     }
   }
@@ -1049,6 +1078,7 @@ export class GridEngine<TData = unknown> {
 
     let scrollTop: number;
     if (position === undefined) {
+      // Minimal scroll: skip when the row is already fully visible.
       if (rowTop >= state.scrollTop - 0.5 && rowBottom <= viewportBottom + 0.5) {
         return;
       }
@@ -1138,6 +1168,7 @@ export class GridEngine<TData = unknown> {
     let nextRow = current.rowIndex;
     let nextCol = colIndex + (forward ? 1 : -1);
 
+    // Tab wraps row-to-row at column edges (spreadsheet-style).
     if (nextCol >= columns.length) {
       nextCol = 0;
       nextRow += 1;
@@ -1168,6 +1199,7 @@ export class GridEngine<TData = unknown> {
       }
       this.store.dispatch({ type: "SET_FOCUSED_HEADER", focusedHeaderColId: colId });
       if (colId !== null) {
+        // Header focus and body cell focus are mutually exclusive for a11y.
         this.store.dispatch({ type: "SET_FOCUSED_CELL", focusedCell: null });
       }
     });
@@ -1530,6 +1562,7 @@ export class GridEngine<TData = unknown> {
   }
 
   getSortModel(): SortModel {
+    // SortModule owns mutations; readSortModel is the no-module fallback.
     return this.sortController?.getSortModel() ?? readSortModel(this.store.getState().columns);
   }
 
@@ -1948,6 +1981,7 @@ export class GridEngine<TData = unknown> {
               totalPages: state.pagination.totalPages,
               totalRows: state.pagination.totalRows,
               pageSizeSelector: this.paginationController?.getPageSizeSelector() ?? [20, 50, 100],
+              autoPageSize: this.paginationController?.isAutoPageSize() ?? false,
               suppressPanel: this.paginationController?.shouldSuppressPanel() ?? false,
             }
           : undefined,

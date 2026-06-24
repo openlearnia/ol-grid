@@ -68,6 +68,8 @@ const GRID_OPTION_KEYS = [
   "filterModel",
   "pagination",
   "paginationPageSize",
+  "paginationPageSizeSelector",
+  "paginationAutoPageSize",
   "paginationPage",
   "selectedRowIds",
   "defaultColDef",
@@ -86,6 +88,7 @@ function syncGridOptions<TData>(
 ): void {
   for (const key of GRID_OPTION_KEYS) {
     const value = options[key];
+    // Snapshot diff — parent re-renders with new object identity won't re-sync unchanged props.
     if (value !== undefined && value !== synced[key]) {
       engine.setOption(key, value as GridOptions<TData>[typeof key]);
       (synced as Record<typeof key, unknown>)[key] = value;
@@ -99,6 +102,7 @@ function createEngine<TData>(options: GridOptions<TData>): GridEngine<TData> {
   ensurePaginationModuleRegistered();
   return createGridEngine({
     ...options,
+    // Signals dom-renderer to reserve React portal hosts per visible cell.
     frameworkCellRenderers: true,
     modules: [...(options.modules ?? []), SortModule, FilterModule, PaginationModule],
   });
@@ -130,6 +134,7 @@ export function useOlGrid<TData>(options: GridOptions<TData>): UseOlGridResult<T
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
+      // Defer destroy so StrictMode remount can cancel — avoids killing a live engine.
       queueMicrotask(() => {
         if (!aliveRef.current) {
           engine.destroy();
@@ -214,6 +219,7 @@ export const OlGrid = forwardRef(function OlGrid<TData>(
   useEffect(() => {
     return () => {
       queueMicrotask(() => {
+        // Same StrictMode-safe teardown as useOlGrid — unmount alone does not destroy.
         if (!aliveRef.current) {
           engine.destroy();
           engineRef.current = null;

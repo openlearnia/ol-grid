@@ -40,6 +40,7 @@ export function useOlGrid<TData>(
   provide(GRID_API_INJECTION_KEY, api);
 
   onMounted(() => {
+    // toRaw strips Vue proxies before passing options into the imperative engine.
     const initialOptions = toRaw("value" in options ? options.value : options) as GridOptions<TData>;
     const engine = createAdapterEngine(initialOptions);
     grid.value = engine;

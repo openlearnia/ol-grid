@@ -95,6 +95,7 @@ export interface RenderFrame {
     totalPages: number;
     totalRows: number;
     pageSizeSelector: number[];
+    autoPageSize: boolean;
     suppressPanel: boolean;
   };
 }

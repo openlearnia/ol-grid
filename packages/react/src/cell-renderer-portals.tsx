@@ -15,6 +15,7 @@ export interface CellPortalEntry {
 }
 
 function cellPortalKey(rowIndex: number, colId: string): string {
+  // Virtualized rows reuse DOM — key by data position, not row node id.
   return `${rowIndex}:${colId}`;
 }
 

@@ -11,7 +11,9 @@
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rm -rf node_modules",
     "bundle-size": "pnpm --filter @ol-grid/benchmarks run bundle-size",
-    "perf:100k": "pnpm --filter @ol-grid/benchmarks run perf:100k"
+    "perf:100k": "pnpm --filter @ol-grid/benchmarks run perf:100k",
+    "docs": "typedoc",
+    "docs:watch": "typedoc --watch"
   },
   "devDependencies": {
     "@ol-grid/sort": "workspace:*",
@@ -20,6 +22,7 @@
     "happy-dom": "^20.10.6",
     "tsup": "^8.4.0",
     "turbo": "^2.4.4",
+    "typedoc": "^0.28.5",
     "typescript": "^5.8.2",
     "vitest": "^3.0.8"
   }

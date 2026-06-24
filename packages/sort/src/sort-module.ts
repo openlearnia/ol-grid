@@ -16,6 +16,7 @@ function resolveSortValueGetter(
   ctx: GridContext,
 ): (node: import("@ol-grid/core").RowNode) => unknown {
   const field = colDef.field;
+  // Fast path: plain field columns skip getCellValue / API context on every compare.
   const useDirectField = !!field && !colDef.valueGetter && !colDef.comparator;
   return useDirectField
     ? (node) => (node.data as Record<string, unknown> | undefined)?.[field]
@@ -46,11 +47,21 @@ function buildSortEntries(
 function createSortStage(ctx: GridContext): import("@ol-grid/core").RowModelStage {
   return {
     name: "sort",
+    // After filter (~100); before pagination (300).
     order: 200,
     run(rows) {
       const sortModel = getSortModel(ctx.getStore().getState().columns);
       if (sortModel.length === 0) return rows;
-      return sortRowNodesMulti(rows, buildSortEntries(ctx, sortModel));
+
+      const options = ctx.getOptions() as GridOptions;
+      const accentedSort = options.accentedSort === true;
+      const sorted = sortRowNodesMulti(rows, buildSortEntries(ctx, sortModel), accentedSort);
+
+      const postSortRows = options.postSortRows;
+      if (postSortRows) {
+        postSortRows({ nodes: sorted });
+      }
+      return sorted;
     },
   };
 }
@@ -65,6 +76,7 @@ function isAdditiveSort(
 
   const key = options.multiSortKey ?? "shift";
   if (key === "ctrl") {
+    // metaKey covers macOS Cmd when multiSortKey is "ctrl".
     return event.ctrlKey || event.metaKey;
   }
   return event.shiftKey;
@@ -85,6 +97,7 @@ export function createSortController(ctx: GridContext) {
         const columns = toggleColumnSortInColumns(state.columns, colId, additive);
         const nextModel = getSortModel(columns);
         const previousModel = getSortModel(state.columns);
+        // Cycle asc → desc → null can be a no-op when sort was already cleared.
         if (sortModelsEqual(previousModel, nextModel)) return;
 
         engine.getColumnModel().setColumnState(columns);

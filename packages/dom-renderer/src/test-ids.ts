@@ -53,5 +53,6 @@ export function filterPopupClearTestId(colId: string): string {
 }
 
 export function sortIndicatorTestId(colId: string): string {
+  // On the sort-indicator child, not the header cell (see headerCellTestId).
   return `ol-grid-sort-${colId}`;
 }

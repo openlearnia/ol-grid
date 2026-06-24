@@ -49,6 +49,7 @@ export function createGrid<TData>(
   }
 
   const defaultModules = [SortModule, FilterModule];
+  // Infinite row model is opt-in — only register when rowModelType demands it.
   if (options.rowModelType === "infinite") {
     defaultModules.push(InfiniteRowModelModule);
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clampPage,
+  computeAutoPageSize,
   computeTotalPages,
   normalizePageSize,
   slicePageRows,
@@ -26,5 +27,11 @@ describe("pagination helpers", () => {
   it("normalizes page size", () => {
     expect(normalizePageSize(0)).toBe(1);
     expect(normalizePageSize(25.9)).toBe(25);
+  });
+
+  it("computes auto page size from viewport and row height", () => {
+    expect(computeAutoPageSize(320, 32)).toBe(10);
+    expect(computeAutoPageSize(0, 32)).toBe(1);
+    expect(computeAutoPageSize(100, 0)).toBe(1);
   });
 });

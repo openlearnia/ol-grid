@@ -131,6 +131,7 @@ export class ColumnModel<TData = unknown> {
     if (vp <= 0) return this.columnState;
 
     const centerColIds = this.centerColumns
+      // Flex columns fill remaining space — sizeColumnsToFit only scales fixed-width center cols.
       .filter((col) => !col.def.flex && col.def.suppressSizeToFit !== true)
       .map((col) => col.colId);
 
@@ -329,6 +330,7 @@ export class ColumnModel<TData = unknown> {
 
       const assigned = fixedTotal + flexIndexes.reduce((sum, i) => sum + specs[i]!.width, 0);
       const slack = viewportWidth - assigned;
+      // Rounding can leave 1px gap — absorb into the last flex column.
       if (slack > 0 && flexIndexes.length > 0) {
         const lastFlexIndex = flexIndexes[flexIndexes.length - 1]!;
         specs[lastFlexIndex]!.width += slack;

@@ -22,6 +22,7 @@ export function findNextEditableCell<TData>(
   let colIndex = startColIndex + (forward ? 1 : -1);
 
   for (let step = 0; step < colIds.length * rowCount; step++) {
+    // Wrap across rows when Tab/Shift+Tab leaves the column edge.
     if (colIndex >= colIds.length) {
       colIndex = 0;
       rowIndex += 1;

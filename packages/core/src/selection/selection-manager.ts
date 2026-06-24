@@ -35,12 +35,14 @@ export function handleRowClickSelection(
 ): SelectionState {
   const { rowId, multiSelect, shiftRange, displayedRowIds } = params;
 
+  // Shift-click range uses on-screen row order, not source data order.
   if (state.mode === "multiRow" && shiftRange && displayedRowIds?.length) {
     const anchor = state.selectionAnchorRowId ?? rowId;
     return selectRowRange(state, anchor, rowId, displayedRowIds);
   }
 
   if (state.mode === "singleRow") {
+    // AG Grid parity: re-clicking the sole selected row does not clear selection.
     if (state.selectedRowIds.has(rowId) && state.selectedRowIds.size === 1) {
       return state;
     }
@@ -60,6 +62,7 @@ export function handleRowClickSelection(
         next.add(rowId);
       }
     } else {
+      // Plain click without modifier replaces the selection set.
       if (next.size === 1 && next.has(rowId)) {
         return { ...state, selectionAnchorRowId: rowId };
       }

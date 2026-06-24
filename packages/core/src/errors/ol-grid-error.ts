@@ -11,6 +11,7 @@ export function requireGridModule(
   packageName: string,
 ): void {
   if (registered) return;
+  // Fail fast at API call sites — modules are opt-in via ModuleRegistry.register().
   throw new OlGridError(
     `${moduleName} is not registered. Import and register ${moduleName} from '${packageName}'.`,
   );

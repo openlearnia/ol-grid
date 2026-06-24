@@ -1,3 +1,8 @@
+/**
+ * @packageDocumentation
+ * Headless grid engine: {@link GridOptions}, {@link GridApi}, column/row models, and {@link ModuleRegistry}.
+ * @module @ol-grid/core
+ */
 import { createGridEngine, GridEngine } from "./engine/grid-engine.js";
 import { EventBus } from "./events/event-bus.js";
 import { ModuleRegistry } from "./modules/module-registry.js";
@@ -9,6 +14,7 @@ export type {
   ColumnState,
   ColumnGroupState,
   ApplyColumnStateParams,
+  SortDef,
   SortComparatorFn,
   ValueGetterParams,
   ValueParserParams,
@@ -31,12 +37,25 @@ export type {
   RowDataUpdatedEvent,
   GridEvents,
 } from "./types/events.js";
-export type { GridOptions, GetRowIdParams, RowSelectionOption, SortModel, MultiSortKey, InfiniteDatasource, InfiniteGetRowsParams } from "./types/options.js";
+export type {
+  GridOptions,
+  GetRowIdParams,
+  RowSelectionOption,
+  SortModel,
+  MultiSortKey,
+  InfiniteDatasource,
+  InfiniteGetRowsParams,
+  PostSortRowsParams,
+} from "./types/options.js";
 export type { LocaleText, LocaleTextKey } from "./locale/locale-text.js";
 export { DEFAULT_LOCALE_TEXT } from "./locale/locale-text.js";
 export { mergeLocaleText } from "./locale/merge-locale-text.js";
 export { createLocaleResolver } from "./locale/get-locale-text.js";
 export { flattenColumnDefs, isColumnGroup } from "./column/flatten-column-defs.js";
+export {
+  extractInitialSortModelFromColumnDefs,
+  resolveColumnDefInitialSort,
+} from "./column/initial-sort.js";
 export { buildHeaderRows, hasColumnGroups } from "./column/build-header-rows.js";
 export type { RenderHeaderCell, RenderHeaderRow, HeaderRowsResult } from "./column/build-header-rows.js";
 export type {

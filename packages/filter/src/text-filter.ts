@@ -13,6 +13,7 @@ export function doesTextFilterPass(
   const haystack = normalizeFilterText(value);
 
   if (normalizedNeedle === "" && model.type !== "equals" && model.type !== "notEqual") {
+    // Empty text filter is a no-op for substring operators (AG Grid parity).
     return true;
   }
 

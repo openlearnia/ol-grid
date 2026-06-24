@@ -7,6 +7,7 @@ export function isCellEditable<TData>(
   api: unknown,
   context: unknown,
 ): boolean {
+  // Editing is opt-in — omitted `editable` means read-only (AG Grid default).
   if (colDef.editable === undefined) return false;
   if (typeof colDef.editable === "function") {
     const params: EditableCallbackParams<TData> = {

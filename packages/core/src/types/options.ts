@@ -2,7 +2,11 @@ import type { ColumnDef } from "./column.js";
 import type { LocaleText } from "../locale/locale-text.js";
 import type { GridEvents } from "./events.js";
 import type { GridModule } from "../modules/module-registry.js";
-import type { RowModelType } from "./row.js";
+import type { RowModelType, RowNode } from "./row.js";
+
+export interface PostSortRowsParams<TData = unknown> {
+  nodes: RowNode<TData>[];
+}
 
 export interface GetRowIdParams<TData = unknown> {
   data: TData;
@@ -31,6 +35,24 @@ export interface InfiniteDatasource<TData = unknown> {
   destroy?(): void;
 }
 
+/**
+ * Configuration for a grid instance. Passed to {@link createGrid} or framework adapters.
+ *
+ * @typeParam TData - Row object shape for `rowData` and column `field` keys.
+ *
+ * @example
+ * ```ts
+ * import type { GridOptions } from "@ol-grid/core";
+ *
+ * const options: GridOptions<Person> = {
+ *   columnDefs: [{ field: "name", sortable: true }],
+ *   rowData: people,
+ *   pagination: true,
+ *   paginationPageSize: 25,
+ *   onGridReady: (e) => e.api.setSortModel([{ colId: "name", sort: "asc" }]),
+ * };
+ * ```
+ */
 export interface GridOptions<TData = unknown> extends GridEvents<TData> {
   columnDefs?: ColumnDef<TData>[];
   defaultColDef?: Partial<ColumnDef<TData>>;
@@ -41,10 +63,16 @@ export interface GridOptions<TData = unknown> extends GridEvents<TData> {
   suppressMultiSort?: boolean;
   /** When true, every header click adds to the sort model without a modifier. */
   alwaysMultiSort?: boolean;
+  /** When true, string sort uses locale-aware collation ignoring accents (REQ-SORT-21). */
+  accentedSort?: boolean;
+  /** Reorder rows after primary sort (e.g. pin summary rows at bottom). */
+  postSortRows?: (params: PostSortRowsParams<TData>) => void;
   /** Enable client-side pagination (disables row virtualization). */
   pagination?: boolean;
   /** Rows per page when pagination is enabled (default 100). */
   paginationPageSize?: number;
+  /** Fit page size to viewport body height; hides the page size selector. */
+  paginationAutoPageSize?: boolean;
   /** Page size choices in the pagination panel (default `[20, 50, 100]`). */
   paginationPageSizeSelector?: number[];
   /** Hide the default pagination panel while keeping API pagination. */

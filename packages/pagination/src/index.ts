@@ -1,3 +1,8 @@
+/**
+ * @packageDocumentation
+ * Client-side pagination pipeline stage and footer panel.
+ * @module @ol-grid/pagination
+ */
 export {
   PaginationModule,
   PAGINATION_MODULE_NAME,

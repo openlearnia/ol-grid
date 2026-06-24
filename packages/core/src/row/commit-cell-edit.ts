@@ -32,6 +32,7 @@ export function commitCellEdit<TData>(
     newValue = colDef.valueParser(params);
   } else if (colDef.field && node.data !== undefined) {
     const fieldValue = (node.data as Record<string, unknown>)[colDef.field];
+    // Implicit number coercion when no valueParser — matches common numeric column defs.
     if (typeof fieldValue === "number") {
       const parsed = Number(rawValue);
       newValue = Number.isNaN(parsed) ? rawValue : parsed;

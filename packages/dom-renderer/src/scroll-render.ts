@@ -15,6 +15,7 @@ export function computeScrollVirtualRange(input: ScrollVirtualInput): RowVirtual
 }
 
 export function createRowTransform(rowOffset: number): string {
+  // translate3d promotes the row stack to its own compositor layer during scroll.
   return `translate3d(0, ${rowOffset}px, 0)`;
 }
 

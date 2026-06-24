@@ -53,6 +53,7 @@ function prepareActiveFilters<TData>(
 
     const entry: PreparedColumnFilter<TData> = { def, model };
     if (model.filterType === "text") {
+      // Normalize once per filter — rows are scanned in a tight inner loop.
       entry.normalizedTextNeedle = normalizeFilterText(model.filter);
     }
     prepared.push(entry);
@@ -99,6 +100,7 @@ export function applyColumnFilters<TData>(
     return rows;
   }
 
+  // AND across columns — row must pass every active column filter.
   const result: RowNode<TData>[] = [];
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
     const node = rows[rowIndex]!;

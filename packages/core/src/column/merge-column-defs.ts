@@ -18,6 +18,7 @@ function mergeOne<TData>(
     merged.meta = { ...defaultColDef.meta, ...def.meta };
   }
   if (def.children?.length) {
+    // Group headers inherit defaultColDef onto each child recursively.
     merged.children = def.children.map((child) => mergeOne(child, defaultColDef));
   }
   return merged;

@@ -1,10 +1,21 @@
-const DEFAULT_COLLATOR = new Intl.Collator(undefined, {
+const ACCENTED_COLLATOR = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: "base",
 });
 
-export function compareValues(a: unknown, b: unknown): number {
+function compareStringsCodePoint(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+export function compareSortKeys(a: string, b: string, accentedSort = false): number {
+  return accentedSort ? ACCENTED_COLLATOR.compare(a, b) : compareStringsCodePoint(a, b);
+}
+
+export function compareValues(a: unknown, b: unknown, accentedSort = false): number {
   if (a === b) return 0;
+  // Null/undefined sort before any value — consistent across column types.
   if (a === null || a === undefined) return -1;
   if (b === null || b === undefined) return 1;
 
@@ -20,9 +31,8 @@ export function compareValues(a: unknown, b: unknown): number {
     return a.getTime() - b.getTime();
   }
 
-  return DEFAULT_COLLATOR.compare(String(a), String(b));
-}
-
-export function compareSortKeys(a: string, b: string): number {
-  return DEFAULT_COLLATOR.compare(a, b);
+  const left = String(a);
+  const right = String(b);
+  // `accentedSort` uses locale-aware collation; default is fast code-point order.
+  return accentedSort ? ACCENTED_COLLATOR.compare(left, right) : compareStringsCodePoint(left, right);
 }

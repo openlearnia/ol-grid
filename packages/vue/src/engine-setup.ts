@@ -14,6 +14,7 @@ let sortModuleRegistered = false;
 let filterModuleRegistered = false;
 let paginationModuleRegistered = false;
 
+/** Idempotent registration — adapters call this once per app, not per grid instance. */
 function ensureSortModuleRegistered(): void {
   if (sortModuleRegistered) return;
   ModuleRegistry.register(SortModule);
@@ -73,6 +74,7 @@ export function syncGridOptions<TData>(
 ): void {
   for (const key of GRID_OPTION_KEYS) {
     const value = options[key];
+    // Reference-compare synced snapshot — avoids redundant engine rebuilds on parent re-render.
     if (value !== undefined && value !== synced[key]) {
       engine.setOption(key, value as GridOptions<TData>[typeof key]);
       synced[key] = value;
@@ -85,6 +87,7 @@ export function syncEventHandlers<TData>(
   options: GridOptions<TData>,
 ): void {
   const opts = engine.getOptions() as GridOptions<TData>;
+  // Handlers live on the mutable options bag — not part of GRID_OPTION_KEYS sync.
   opts.onSelectionChanged = options.onSelectionChanged;
   opts.onSortChanged = options.onSortChanged;
   opts.onRowDataUpdated = options.onRowDataUpdated;

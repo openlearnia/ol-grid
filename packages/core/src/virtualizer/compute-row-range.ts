@@ -174,6 +174,7 @@ export function computeRowVirtualRange(input: RowVirtualRangeInput): RowVirtualR
   }
 
   const firstVisible = getFirstVisibleRowIndex(scrollTop, rowHeight);
+  // +1 covers partial row clipped at the bottom edge of the viewport.
   const visibleCount = Math.ceil(viewportHeight / rowHeight) + 1;
   const rowStart = Math.max(0, firstVisible - overscanBefore);
   const rowEnd = Math.min(rowCount - 1, firstVisible + visibleCount + overscanAfter);

@@ -97,6 +97,7 @@ export class InfiniteRowModel<TData = unknown> {
       return this.createStubNode(index, true);
     }
 
+    // Stub rows occupy virtual height while blocks load — renderer shows loading state.
     return this.createStubNode(index, false);
   }
 
@@ -240,6 +241,7 @@ export class InfiniteRowModel<TData = unknown> {
     startRow: number,
     result: { rows: TData[]; rowCount?: number },
   ): void {
+    // Stale responses from purge/refresh are ignored via monotonic requestSequence.
     if (requestId !== this.requestSequence) return;
 
     const block = this.blocks.get(blockIndex);
@@ -273,6 +275,7 @@ export class InfiniteRowModel<TData = unknown> {
       this.lastRowIndexKnown = true;
       this.callbacks.onRowCountChanged?.(this.rowCount);
     } else if (startRow + result.rows.length > this.rowCount) {
+      // Unknown total: grow rowCount by one block beyond last loaded row (AG Grid heuristic).
       this.rowCount = startRow + result.rows.length + this.cacheBlockSize;
       this.lastRowIndexKnown = false;
       this.callbacks.onRowCountChanged?.(this.rowCount);
@@ -303,6 +306,7 @@ export class InfiniteRowModel<TData = unknown> {
   }
 
   private evictIfNeeded(): void {
+    // LRU eviction when loaded blocks exceed maxBlocksInCache.
     while (this.lruOrder.length > this.maxBlocksInCache) {
       const evictIndex = this.lruOrder.shift();
       if (evictIndex == null) break;

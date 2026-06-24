@@ -1,0 +1,41 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "ol-grid API",
+  "readme": "docs/README.md",
+  "entryPoints": [
+    "packages/core/src/index.ts",
+    "packages/sort/src/index.ts",
+    "packages/filter/src/index.ts",
+    "packages/pagination/src/index.ts",
+    "packages/infinite-row-model/src/index.ts",
+    "packages/dom-renderer/src/index.ts",
+    "packages/locale-en/src/index.ts",
+    "packages/react/src/index.ts",
+    "packages/vanilla/src/index.ts",
+    "packages/vue/src/index.ts",
+    "packages/svelte/src/index.ts"
+  ],
+  "entryPointStrategy": "resolve",
+  "out": "docs/api",
+  "tsconfig": "tsconfig.docs.json",
+  "skipErrorChecking": true,
+  "exclude": [
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ],
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "sort": ["source-order"],
+  "navigation": {
+    "includeCategories": true
+  },
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Core",
+    "Modules",
+    "Renderers",
+    "Adapters",
+    "*"
+  ]
+}

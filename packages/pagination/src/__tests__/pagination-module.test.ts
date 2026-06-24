@@ -56,4 +56,31 @@ describe("PaginationModule integration", () => {
 
     engine.destroy();
   });
+
+  it("fits page size to viewport when paginationAutoPageSize is enabled", () => {
+    const rowData = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1,
+      name: `Row ${index + 1}`,
+    }));
+
+    const engine = createGridEngine<Row>({
+      modules: [SortModule, PaginationModule],
+      pagination: true,
+      paginationAutoPageSize: true,
+      rowHeight: 32,
+      getRowId: ({ data }) => String(data.id),
+      columnDefs: [{ field: "name", headerName: "Name", width: 160 }],
+      rowData,
+    });
+
+    engine.getStore().dispatch({ type: "SET_VIEWPORT", width: 800, height: 320 });
+
+    expect(engine.getApi().paginationGetPageSize()).toBe(10);
+    expect(engine.getApi().getDisplayedRowCount()).toBe(10);
+
+    engine.getStore().dispatch({ type: "SET_VIEWPORT", width: 800, height: 640 });
+    expect(engine.getApi().paginationGetPageSize()).toBe(20);
+
+    engine.destroy();
+  });
 });

@@ -10,6 +10,7 @@ export function getCellValue<TData>(
   const data = node.data;
   if (data === undefined) return undefined;
 
+  // valueGetter wins over field — same precedence as AG Grid cell pipeline.
   if (colDef.valueGetter) {
     return colDef.valueGetter({
       data,

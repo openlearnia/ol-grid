@@ -29,6 +29,7 @@ export function renderCellContent<TData>(
     cellEl.textContent = result;
     return;
   }
+  // HTMLElement results replace cell contents — used by custom DOM renderers.
   if (result instanceof HTMLElement) {
     cellEl.replaceChildren(result);
     return;

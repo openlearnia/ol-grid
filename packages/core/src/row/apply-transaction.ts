@@ -32,6 +32,7 @@ function resolveRemoveId<TData>(
   if (isRowNode(item)) return item.id;
 
   const data = item as TData;
+  // Prefer reference equality — avoids scanning when caller passes source row objects.
   const byRef = sourceData.indexOf(data);
   if (byRef >= 0) {
     return getRowId({ data, index: byRef });

@@ -56,6 +56,11 @@ export type SortComparatorFn<TData = unknown, TValue = unknown> = (
   isDescending: boolean,
 ) => number;
 
+export interface SortDef {
+  sort: "asc" | "desc";
+  sortIndex?: number;
+}
+
 export interface ColumnDef<TData = unknown, TValue = unknown> {
   id?: string;
   field?: keyof TData & string;
@@ -66,6 +71,10 @@ export interface ColumnDef<TData = unknown, TValue = unknown> {
   flex?: number;
   pinned?: "left" | "right" | null;
   sortable?: boolean;
+  /** Initial sort direction on grid load (alias: `initialSort`). */
+  sort?: "asc" | "desc" | SortDef;
+  /** Initial sort direction on grid load when `sort` is not set. */
+  initialSort?: "asc" | "desc" | SortDef;
   comparator?: SortComparatorFn<TData, TValue>;
   filterable?: boolean;
   filter?: boolean | "text" | "number" | "date";

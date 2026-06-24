@@ -7,6 +7,7 @@ export function resolveFilterType<TData>(colDef: ColumnDef<TData>): ProvidedFilt
     return filter;
   }
   if (filter === true || colDef.filterable === true) {
+    // Bare `filter: true` enables the default text filter UI.
     return "text";
   }
   return null;

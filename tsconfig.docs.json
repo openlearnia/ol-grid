@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "packages/core/src/**/*.ts",
+    "packages/sort/src/**/*.ts",
+    "packages/filter/src/**/*.ts",
+    "packages/pagination/src/**/*.ts",
+    "packages/infinite-row-model/src/**/*.ts",
+    "packages/dom-renderer/src/**/*.ts",
+    "packages/locale-en/src/**/*.ts",
+    "packages/react/src/**/*.ts",
+    "packages/react/src/**/*.tsx",
+    "packages/vanilla/src/**/*.ts",
+    "packages/vue/src/**/*.ts",
+    "packages/vue/src/**/*.tsx",
+    "packages/svelte/src/**/*.ts"
+  ],
+  "exclude": [
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

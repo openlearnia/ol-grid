@@ -16,6 +16,7 @@ export function rowMatchesQuickFilter<TData>(
   const normalized = normalizeQuickFilterText(filterText);
   if (!normalized) return true;
 
+  // OR across visible columns; matches formatted display text, not raw field values.
   for (const colDef of columnDefs) {
     if (colDef.hide) continue;
     const value = getCellValue(node, colDef, api, context);

@@ -5,6 +5,7 @@ export function mergeLocaleText(
   ...overrides: Array<Partial<LocaleText> | undefined>
 ): LocaleText {
   const merged: LocaleText = { ...base };
+  // Later overrides win; undefined values are skipped to preserve prior keys.
   for (const override of overrides) {
     if (!override) continue;
     for (const [key, value] of Object.entries(override)) {

@@ -23,6 +23,7 @@ function attachEditorKeyHandlers(
   params: CellEditorParams,
 ): void {
   element.addEventListener("keydown", (event) => {
+    // stopPropagation keeps arrow keys inside the editor, not the grid navigator.
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();

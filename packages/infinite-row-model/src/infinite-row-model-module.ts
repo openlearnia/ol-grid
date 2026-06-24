@@ -46,6 +46,7 @@ export function createInfiniteRowModelController(ctx: GridContext) {
         });
       },
       onBlocksLoaded() {
+        // Bumps rowDataVersion so virtualizer re-reads stub→loaded row transitions.
         ctx.getStore().dispatch({ type: "BUMP_ROW_DATA_VERSION" });
       },
     });

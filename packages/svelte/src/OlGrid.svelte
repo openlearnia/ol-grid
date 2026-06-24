@@ -57,6 +57,7 @@
   let storeVersion = 0;
   const syncedOptions: Partial<Record<(typeof GRID_OPTION_KEYS)[number], unknown>> = {};
 
+  // data-store-version on the host div ties Svelte updates to engine store notifications.
   function currentOptions(): GridOptions {
     return buildGridOptionsFromProps({
       columnDefs,

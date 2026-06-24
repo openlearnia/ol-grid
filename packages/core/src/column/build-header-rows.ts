@@ -265,6 +265,7 @@ function buildRowsForRegion<TData>(
       };
 
       if (rowIndex < maxDepth - 1) {
+        // Leaf spans remaining header rows so group labels sit on row 1 only.
         leafCell.rowSpan = maxDepth - rowIndex;
         rows[rowIndex]!.cells.push(leafCell);
       } else {
@@ -347,6 +348,7 @@ export function buildHeaderRows<TData>(params: {
       for (const row of pinnedLeft) {
         for (const cell of row.cells) {
           if (cell.gridColumn != null) {
+            // Selection checkbox occupies grid column 1 in multi-row headers.
             cell.gridColumn += 1;
           }
         }

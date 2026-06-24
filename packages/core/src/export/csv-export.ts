@@ -88,6 +88,7 @@ export function generateCsv<TData>(
     lines.push(fields.join(separator));
   }
 
+  // Excel-friendly CRLF; fields escaped per RFC 4180 when needed.
   return lines.join("\r\n");
 }
 

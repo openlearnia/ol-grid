@@ -31,5 +31,8 @@ coverage/
 # Vite
 examples/**/dist/
 
+# Generated API docs
+docs/api/
+
 # Changesets (keep config, ignore local state if any)
 .changeset/pre.json

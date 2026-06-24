@@ -8,6 +8,7 @@ export function sortRowNodes<TData>(
   sort: "asc" | "desc",
   getValue: (node: RowNode<TData>) => unknown,
   comparator?: SortComparatorFn<TData, unknown>,
+  accentedSort = false,
 ): RowNode<TData>[] {
   const length = nodes.length;
   if (length <= 1) return nodes;
@@ -37,7 +38,7 @@ export function sortRowNodes<TData>(
       return cmp * direction;
     });
   } else {
-    sortIndicesByValue(nodes, getValue, indices, direction);
+    sortIndicesByValue(nodes, getValue, indices, direction, accentedSort);
   }
 
   const result = new Array<RowNode<TData>>(length);
@@ -52,8 +53,10 @@ function sortIndicesByValue<TData>(
   getValue: (node: RowNode<TData>) => unknown,
   indices: Uint32Array,
   direction: number,
+  accentedSort = false,
 ): void {
   const length = nodes.length;
+  // Probe column homogeneity once so we can use typed fast sorts when possible.
   let numeric = true;
   let stringOnly = true;
   const numbers = new Float64Array(length);
@@ -86,7 +89,9 @@ function sortIndicesByValue<TData>(
   }
 
   if (stringOnly) {
-    indices.sort((left, right) => compareSortKeys(strings[left]!, strings[right]!) * direction);
+    indices.sort(
+      (left, right) => compareSortKeys(strings[left]!, strings[right]!, accentedSort) * direction,
+    );
     return;
   }
 
@@ -95,7 +100,9 @@ function sortIndicesByValue<TData>(
     values[index] = getValue(nodes[index]!);
   }
 
-  indices.sort((left, right) => compareValues(values[left]!, values[right]!) * direction);
+  indices.sort(
+    (left, right) => compareValues(values[left]!, values[right]!, accentedSort) * direction,
+  );
 }
 
 export function toggleColumnSort(current: "asc" | "desc" | null | undefined): "asc" | "desc" | null {
@@ -109,6 +116,7 @@ export function applySingleColumnSort(
   colId: string,
   nextSort: "asc" | "desc" | null,
 ): ColumnState[] {
+  // Plain header click replaces the entire sort stack with one column.
   return columns.map((column) => ({
     ...column,
     sort: column.colId === colId ? nextSort : null,
@@ -116,6 +124,7 @@ export function applySingleColumnSort(
   }));
 }
 
+// Compact sortIndex after a column is removed from a multi-sort stack.
 function reindexSortedColumns(columns: ColumnState[]): ColumnState[] {
   const active = columns
     .filter((column) => column.sort === "asc" || column.sort === "desc")
@@ -187,11 +196,12 @@ export interface MultiSortEntry<TData> {
 export function sortRowNodesMulti<TData>(
   nodes: RowNode<TData>[],
   entries: MultiSortEntry<TData>[],
+  accentedSort = false,
 ): RowNode<TData>[] {
   if (entries.length === 0) return nodes;
   if (entries.length === 1) {
     const entry = entries[0]!;
-    return sortRowNodes(nodes, entry.sort, entry.getValue, entry.comparator);
+    return sortRowNodes(nodes, entry.sort, entry.getValue, entry.comparator, accentedSort);
   }
 
   const length = nodes.length;
@@ -230,11 +240,12 @@ export function sortRowNodesMulti<TData>(
       } else {
         const leftValue = entry.getValue(nodes[left]!);
         const rightValue = entry.getValue(nodes[right]!);
-        cmp = compareValues(leftValue, rightValue);
+        cmp = compareValues(leftValue, rightValue, accentedSort);
       }
 
       if (cmp !== 0) return cmp * direction;
     }
+    // Stable tie-break: preserve original row order when all sort keys match.
     return left - right;
   });
 
