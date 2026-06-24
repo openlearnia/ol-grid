@@ -12,6 +12,7 @@ export interface RenderHeaderCell {
   groupId?: string;
   sortable?: boolean;
   sort?: "asc" | "desc" | null;
+  sortIndex?: number | null;
   pinned?: "left" | "right" | null;
   isSelectionColumn?: boolean;
   /** 1-based grid column index for multi-row header grid layout. */
@@ -253,6 +254,7 @@ function buildRowsForRegion<TData>(
         width: column?.width ?? def.width ?? 150,
         sortable: def.sortable !== false,
         sort: column?.sort ?? null,
+        sortIndex: column?.sortIndex ?? null,
         pinned: column?.pinned ?? def.pinned ?? null,
         filterType,
         filterActive: filterType ? isFilterModelEntryActive(filterModel[colId]) : false,

@@ -3,16 +3,31 @@ import type { RowNode } from "@ol-grid/core";
 import { compareValues } from "../compare-values.js";
 import {
   applySingleColumnSort,
+  applyAdditiveColumnSort,
   applySortModel,
   getSortModel,
   sortRowNodes,
+  sortRowNodesMulti,
   toggleColumnSort,
+  toggleColumnSortInColumns,
 } from "../sort.js";
 
 function node(id: string, value: unknown): RowNode<{ value: unknown }> {
   return {
     id,
     data: { value },
+    rowIndex: 0,
+    level: 0,
+    expanded: false,
+    selected: false,
+    group: false,
+  };
+}
+
+function dataNode<T>(id: string, data: T): RowNode<T> {
+  return {
+    id,
+    data,
     rowIndex: 0,
     level: 0,
     expanded: false,
@@ -83,14 +98,65 @@ describe("applySingleColumnSort", () => {
   });
 });
 
+describe("multi-column sort helpers", () => {
+  const columns = [
+    { colId: "country", sort: "asc" as const, sortIndex: 0 },
+    { colId: "city", sort: null, sortIndex: null },
+    { colId: "name", sort: null, sortIndex: null },
+  ];
+
+  it("additive sort appends a secondary key", () => {
+    const next = applyAdditiveColumnSort(columns, "city", "asc");
+    expect(getSortModel(next)).toEqual([
+      { colId: "country", sort: "asc" },
+      { colId: "city", sort: "asc" },
+    ]);
+  });
+
+  it("non-additive toggle replaces existing sort model", () => {
+    const next = toggleColumnSortInColumns(columns, "name", false);
+    expect(getSortModel(next)).toEqual([{ colId: "name", sort: "asc" }]);
+  });
+
+  it("sortRowNodesMulti applies keys in sortIndex order", () => {
+    const rows = [
+      dataNode("1", { country: "US", city: "Boston" }),
+      dataNode("2", { country: "US", city: "Austin" }),
+      dataNode("3", { country: "UK", city: "London" }),
+    ];
+    const sorted = sortRowNodesMulti(rows, [
+      {
+        colId: "country",
+        sort: "asc",
+        getValue: (row) => (row.data as { country: string }).country,
+      },
+      {
+        colId: "city",
+        sort: "asc",
+        getValue: (row) => (row.data as { city: string }).city,
+      },
+    ]);
+    expect(sorted.map((row) => row.id)).toEqual(["3", "2", "1"]);
+  });
+});
+
 describe("applySortModel", () => {
-  it("applies multi-entry model to column state (single sort uses first entry)", () => {
+  it("applies multi-entry model with sortIndex order", () => {
     const columns = [
       { colId: "a", sort: null, sortIndex: null },
       { colId: "b", sort: null, sortIndex: null },
+      { colId: "c", sort: null, sortIndex: null },
     ];
-    const next = applySortModel(columns, [{ colId: "b", sort: "asc" }]);
-    expect(getSortModel(next)).toEqual([{ colId: "b", sort: "asc" }]);
+    const next = applySortModel(columns, [
+      { colId: "b", sort: "asc" },
+      { colId: "c", sort: "desc" },
+    ]);
+    expect(getSortModel(next)).toEqual([
+      { colId: "b", sort: "asc" },
+      { colId: "c", sort: "desc" },
+    ]);
+    expect(next.find((column) => column.colId === "b")?.sortIndex).toBe(0);
+    expect(next.find((column) => column.colId === "c")?.sortIndex).toBe(1);
   });
 
   it("clears sort when model is empty", () => {

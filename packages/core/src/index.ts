@@ -22,6 +22,7 @@ export type {
   CellClickedEvent,
   SelectionChangedEvent,
   SortChangedEvent,
+  PaginationChangedEvent,
   FilterChangedEvent,
   FilterOpenedEvent,
   DisplayedColumnsChangedEvent,
@@ -30,7 +31,7 @@ export type {
   RowDataUpdatedEvent,
   GridEvents,
 } from "./types/events.js";
-export type { GridOptions, GetRowIdParams, RowSelectionOption, SortModel, InfiniteDatasource, InfiniteGetRowsParams } from "./types/options.js";
+export type { GridOptions, GetRowIdParams, RowSelectionOption, SortModel, MultiSortKey, InfiniteDatasource, InfiniteGetRowsParams } from "./types/options.js";
 export type { LocaleText, LocaleTextKey } from "./locale/locale-text.js";
 export { DEFAULT_LOCALE_TEXT } from "./locale/locale-text.js";
 export { mergeLocaleText } from "./locale/merge-locale-text.js";
@@ -46,7 +47,7 @@ export type {
   RenderCell,
 } from "./types/renderer.js";
 export type { RowNode, RowModelType, RowModelMeta } from "./types/row.js";
-export type { GridState, SelectionState, SortingState, CellPosition, EditingState } from "./types/state.js";
+export type { GridState, PaginationState, SelectionState, SortingState, CellPosition, EditingState } from "./types/state.js";
 export type { GridStore, GridAction, StoreListener, Unsubscribe, StateSelector } from "./store/grid-store.js";
 export type { GridModule, RowModelStage, RowModelStageContext } from "./modules/module-registry.js";
 export type { GridContext } from "./modules/grid-context.js";

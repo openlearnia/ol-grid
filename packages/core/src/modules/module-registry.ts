@@ -15,6 +15,11 @@ export interface RowModelStageContext {
   context: unknown;
   sortModel: Array<{ colId: string; sort: "asc" | "desc" }>;
   filterModel: Record<string, unknown>;
+  pagination?: {
+    enabled: boolean;
+    page: number;
+    pageSize: number;
+  };
 }
 
 export interface GridModule {

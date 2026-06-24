@@ -22,6 +22,7 @@ export type GridAction =
   | { type: "SET_OPEN_FILTER"; openFilterColId: string | null }
   | { type: "SET_ROW_MODEL_META"; rowModelMeta: import("../types/row.js").RowModelMeta }
   | { type: "SET_ROW_MODEL_TYPE"; rowModelType: import("../types/row.js").RowModelType }
+  | { type: "SET_PAGINATION"; pagination: import("../types/state.js").PaginationState | undefined }
   | { type: "BUMP_ROW_DATA_VERSION" };
 
 export interface GridStore {
@@ -82,6 +83,8 @@ function gridReducer(state: GridState, action: GridAction): GridState {
       return { ...state, rowModelMeta: action.rowModelMeta };
     case "SET_ROW_MODEL_TYPE":
       return { ...state, rowModelType: action.rowModelType };
+    case "SET_PAGINATION":
+      return { ...state, pagination: action.pagination };
     case "BUMP_ROW_DATA_VERSION":
       return { ...state, rowDataVersion: state.rowDataVersion + 1 };
     default:

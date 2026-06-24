@@ -27,6 +27,7 @@ import {
   type FilterModelEntry,
 } from "./filter-ui.js";
 import { createSortAscIcon, createSortDescIcon } from "./icons.js";
+import { createPaginationPanel } from "./pagination-panel.js";
 import {
   bodyCellTestId,
   bodyViewportTestId,
@@ -100,6 +101,30 @@ function createFocusSentinel(position: "before" | "after"): HTMLElement {
   return sentinel;
 }
 
+function countSortedColumns(columns: Array<{ sort: "asc" | "desc" | null }>): number {
+  return columns.filter((column) => column.sort === "asc" || column.sort === "desc").length;
+}
+
+function fillSortIndicator(
+  indicator: HTMLElement,
+  sort: "asc" | "desc" | null | undefined,
+  sortIndex: number | null | undefined,
+  sortedColumnCount: number,
+): void {
+  indicator.replaceChildren();
+  if (sort === "asc") {
+    indicator.appendChild(createSortAscIcon());
+  } else if (sort === "desc") {
+    indicator.appendChild(createSortDescIcon());
+  }
+  if (sortedColumnCount > 1 && sortIndex != null && sort) {
+    const order = document.createElement("span");
+    order.className = "ol-grid__sort-order";
+    order.textContent = String(sortIndex + 1);
+    indicator.appendChild(order);
+  }
+}
+
 export class DomRenderer implements RendererAdapter {
   readonly type = "dom" as const;
 
@@ -131,6 +156,7 @@ export class DomRenderer implements RendererAdapter {
   private rowsCenter: HTMLElement | null = null;
   private rowsPinnedRight: HTMLElement | null = null;
   private overlay: HTMLElement | null = null;
+  private paginationPanel: HTMLElement | null = null;
   private engine: GridEngine | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private frame: RenderFrame | null = null;
@@ -300,6 +326,11 @@ export class DomRenderer implements RendererAdapter {
     root.appendChild(header);
     root.appendChild(body);
 
+    const paginationPanel = document.createElement("div");
+    paginationPanel.className = "ol-grid__pagination-host";
+    paginationPanel.hidden = true;
+    root.appendChild(paginationPanel);
+
     const overlay = document.createElement("div");
     overlay.className = "ol-grid__overlay";
     overlay.hidden = true;
@@ -339,6 +370,7 @@ export class DomRenderer implements RendererAdapter {
     this.rowsCenter = rowsCenter;
     this.rowsPinnedRight = rowsPinnedRight;
     this.overlay = overlay;
+    this.paginationPanel = paginationPanel;
 
     body.addEventListener("scroll", this.handleScroll, { passive: true });
     body.addEventListener("wheel", this.handleBodyWheel, { passive: true });
@@ -474,6 +506,7 @@ export class DomRenderer implements RendererAdapter {
     this.suppressEditorBlur = !!frame.editing;
     this.host?.style.setProperty("--ol-grid-row-height", `${frame.rowHeight}px`);
     this.host?.classList.toggle("ol-grid--floating-filters", frame.showFloatingFilters);
+    this.host?.classList.toggle("ol-grid--pagination", !!frame.pagination?.enabled);
     this.host?.style.setProperty("--ol-grid-pinned-left-width", `${frame.pinnedLeftWidth}px`);
     this.host?.style.setProperty("--ol-grid-pinned-right-width", `${frame.pinnedRightWidth}px`);
     this.host!.style.width = `${frame.renderWidth}px`;
@@ -521,6 +554,7 @@ export class DomRenderer implements RendererAdapter {
     this.syncFilterPopup(frame);
     this.renderRows(frame);
     this.syncOverlays(frame);
+    this.syncPaginationPanel(frame);
     this.syncEditor(frame);
     this.syncFocusRing(frame);
     this.syncHostTabIndex(frame);
@@ -1065,7 +1099,11 @@ export class DomRenderer implements RendererAdapter {
     engine.getStore().batch(() => {
       engine.setFocusedHeader(colId);
       if (sortable) {
-        engine.toggleColumnSort(colId);
+        engine.toggleColumnSort(colId, {
+          shiftKey: mouseEvent.shiftKey,
+          ctrlKey: mouseEvent.ctrlKey,
+          metaKey: mouseEvent.metaKey,
+        });
       }
     });
 
@@ -1457,7 +1495,13 @@ export class DomRenderer implements RendererAdapter {
           event.preventDefault();
           event.stopPropagation();
           const colId = this.engine.getFocusedHeader();
-          if (colId) this.engine.toggleColumnSort(colId);
+          if (colId) {
+            this.engine.toggleColumnSort(colId, {
+              shiftKey: event.shiftKey,
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+            });
+          }
           return;
         }
         case "Escape":
@@ -1971,11 +2015,12 @@ export class DomRenderer implements RendererAdapter {
     const indicator = document.createElement("span");
     indicator.className = "ol-grid__sort-indicator";
     if (cell.colId) indicator.dataset.testid = sortIndicatorTestId(cell.colId);
-    if (cell.sort === "asc") {
-      indicator.appendChild(createSortAscIcon());
-    } else if (cell.sort === "desc") {
-      indicator.appendChild(createSortDescIcon());
-    }
+    fillSortIndicator(
+      indicator,
+      cell.sort,
+      cell.sortIndex,
+      countSortedColumns(frame.columns),
+    );
 
     const children: HTMLElement[] = [label, indicator];
     if (cell.filterType && cell.colId) {
@@ -2006,6 +2051,7 @@ export class DomRenderer implements RendererAdapter {
     );
 
     const nextChildren: HTMLElement[] = [];
+    const sortedColumnCount = countSortedColumns(columns);
 
     for (const column of columns) {
       let cell = existing.get(column.colId);
@@ -2053,11 +2099,7 @@ export class DomRenderer implements RendererAdapter {
       const indicator = document.createElement("span");
       indicator.className = "ol-grid__sort-indicator";
       indicator.dataset.testid = sortIndicatorTestId(column.colId);
-      if (column.sort === "asc") {
-        indicator.appendChild(createSortAscIcon());
-      } else if (column.sort === "desc") {
-        indicator.appendChild(createSortDescIcon());
-      }
+      fillSortIndicator(indicator, column.sort, column.sortIndex, sortedColumnCount);
 
       const children: HTMLElement[] = [label, indicator];
       if (column.filterType) {
@@ -2173,6 +2215,27 @@ export class DomRenderer implements RendererAdapter {
 
     this.overlay.className = "ol-grid__overlay ol-grid__overlay--no-rows";
     this.overlay.textContent = frame.overlayNoRowsTemplate ?? "No rows to show";
+  }
+
+  private syncPaginationPanel(frame: RenderFrame): void {
+    if (!this.paginationPanel || !this.engine) return;
+
+    const panel = createPaginationPanel(frame, {
+      onFirst: () => this.engine?.paginationGoToFirstPage(),
+      onPrevious: () => this.engine?.paginationGoToPreviousPage(),
+      onNext: () => this.engine?.paginationGoToNextPage(),
+      onLast: () => this.engine?.paginationGoToLastPage(),
+      onPageSizeChange: (size) => this.engine?.paginationSetPageSize(size),
+    });
+
+    if (!panel) {
+      this.paginationPanel.hidden = true;
+      this.paginationPanel.replaceChildren();
+      return;
+    }
+
+    this.paginationPanel.hidden = false;
+    this.paginationPanel.replaceChildren(panel);
   }
 
   private renderRows(frame: RenderFrame): void {

@@ -96,6 +96,7 @@ function App() {
   const [quickFilter, setQuickFilter] = useState("");
   const [lastEdit, setLastEdit] = useState("none");
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
+  const [pagination, setPagination] = useState(false);
 
   const refreshCounts = useCallback(() => {
     setSelectedCount(gridRef.current?.api.getSelectedRows().length ?? 0);
@@ -162,6 +163,17 @@ function App() {
           </select>
         </label>
         <label>
+          Pagination{" "}
+          <select
+            data-testid="demo-pagination-select"
+            value={pagination ? "on" : "off"}
+            onChange={(event) => setPagination(event.target.value === "on")}
+          >
+            <option value="off">Off (virtual scroll)</option>
+            <option value="on">On (25 / page)</option>
+          </select>
+        </label>
+        <label>
           Quick filter{" "}
           <input
             type="search"
@@ -176,13 +188,13 @@ function App() {
         </button>
         <span>{visibleCount} rows visible</span>
         <span>{selectedCount} row(s) selected</span>
-        <span>Column groups: Organization · Timeline · size-to-fit via API</span>
+        <span>Column groups: Organization · Timeline · Shift+click headers for multi-sort</span>
         <span>Last edit: {lastEdit}</span>
         <span>Tab between editable cells · salary min $30k</span>
       </div>
       <div className="demo-grid">
         <OlGrid
-          key={datasetId}
+          key={`${datasetId}-${pagination ? "paged" : "virtual"}`}
           ref={gridRef}
           getRowId={dataset.getRowId}
           columnDefs={dataset.columnDefs as OlGridProps<unknown>["columnDefs"]}
@@ -191,6 +203,9 @@ function App() {
           quickFilterText={quickFilter}
           theme={theme}
           localeBundle={localeEn}
+          pagination={pagination}
+          paginationPageSize={25}
+          paginationPageSizeSelector={[10, 25, 50, 100]}
           onGridReady={refreshCounts}
           onSelectionChanged={refreshCounts}
           onFilterChanged={refreshCounts}

@@ -5,6 +5,8 @@ export {
   sortRowNodes,
   toggleColumnSort,
   applySingleColumnSort,
+  applyAdditiveColumnSort,
+  toggleColumnSortInColumns,
   applySortModel,
   getSortModel,
   sortModelsEqual,

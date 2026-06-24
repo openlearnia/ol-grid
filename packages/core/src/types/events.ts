@@ -24,6 +24,12 @@ export interface SelectionChangedEvent {
   source: string;
 }
 
+export interface PaginationChangedEvent {
+  api: GridApi;
+  newPage: number;
+  newPageSize: number;
+}
+
 export interface SortChangedEvent {
   api: GridApi;
   source: string;
@@ -77,6 +83,7 @@ export interface GridEvents<TData = unknown> {
   onFilterChanged?: (event: FilterChangedEvent) => void;
   onFilterOpened?: (event: FilterOpenedEvent) => void;
   onDisplayedColumnsChanged?: (event: DisplayedColumnsChangedEvent) => void;
+  onPaginationChanged?: (event: PaginationChangedEvent) => void;
   onColumnResized?: (event: ColumnResizedEvent) => void;
   onRowDataUpdated?: (event: RowDataUpdatedEvent<TData>) => void;
   /** Controlled mode: fires when sort model changes from UI or API. */

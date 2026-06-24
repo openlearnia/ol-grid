@@ -1,51 +1,88 @@
 import type { GridContext, GridModule, GridOptions } from "@ol-grid/core";
 import { flattenColumnDefs, getCellValue } from "@ol-grid/core";
 import {
-  applySingleColumnSort,
   applySortModel,
   getSortModel,
   sortModelsEqual,
-  sortRowNodes,
-  toggleColumnSort,
+  sortRowNodesMulti,
+  toggleColumnSortInColumns,
+  type MultiSortEntry,
 } from "./sort.js";
 
 export const SORT_MODULE_NAME = "SortModule";
 
-function createSortStage(): import("@ol-grid/core").RowModelStage {
+function resolveSortValueGetter(
+  colDef: import("@ol-grid/core").ColumnDef,
+  ctx: GridContext,
+): (node: import("@ol-grid/core").RowNode) => unknown {
+  const field = colDef.field;
+  const useDirectField = !!field && !colDef.valueGetter && !colDef.comparator;
+  return useDirectField
+    ? (node) => (node.data as Record<string, unknown> | undefined)?.[field]
+    : (node) => getCellValue(node, colDef, ctx.getApi(), ctx.getOptions().context);
+}
+
+function buildSortEntries(
+  ctx: GridContext,
+  sortModel: Array<{ colId: string; sort: "asc" | "desc" }>,
+): MultiSortEntry<unknown>[] {
+  const flatDefs = flattenColumnDefs(ctx.getOptions().columnDefs ?? []);
+  const entries: MultiSortEntry<unknown>[] = [];
+
+  for (const entry of sortModel) {
+    const colDef = flatDefs.find((column) => column.colId === entry.colId)?.def;
+    if (!colDef) continue;
+    entries.push({
+      colId: entry.colId,
+      sort: entry.sort,
+      getValue: resolveSortValueGetter(colDef, ctx),
+      comparator: colDef.comparator,
+    });
+  }
+
+  return entries;
+}
+
+function createSortStage(ctx: GridContext): import("@ol-grid/core").RowModelStage {
   return {
     name: "sort",
     order: 200,
-    run(rows, ctx) {
-      if (ctx.sortModel.length === 0) return rows;
-
-      const colId = ctx.sortModel[0]!.colId;
-      const sort = ctx.sortModel[0]!.sort;
-      const colDef = flattenColumnDefs(ctx.columnDefs).find((entry) => entry.colId === colId)?.def;
-      if (!colDef) return rows;
-
-      const field = colDef.field;
-      const useDirectField = !!field && !colDef.valueGetter && !colDef.comparator;
-      const getValue = useDirectField
-        ? (node: import("@ol-grid/core").RowNode) =>
-            (node.data as Record<string, unknown> | undefined)?.[field]
-        : (node: import("@ol-grid/core").RowNode) =>
-            getCellValue(node, colDef, ctx.api, ctx.context);
-
-      return sortRowNodes(rows, sort, getValue, colDef.comparator);
+    run(rows) {
+      const sortModel = getSortModel(ctx.getStore().getState().columns);
+      if (sortModel.length === 0) return rows;
+      return sortRowNodesMulti(rows, buildSortEntries(ctx, sortModel));
     },
   };
+}
+
+function isAdditiveSort(
+  options: GridOptions,
+  event?: Pick<MouseEvent, "shiftKey" | "ctrlKey" | "metaKey">,
+): boolean {
+  if (options.suppressMultiSort) return false;
+  if (options.alwaysMultiSort) return true;
+  if (!event) return false;
+
+  const key = options.multiSortKey ?? "shift";
+  if (key === "ctrl") {
+    return event.ctrlKey || event.metaKey;
+  }
+  return event.shiftKey;
 }
 
 export function createSortController(ctx: GridContext) {
   const engine = ctx.getEngine();
 
   return {
-    toggleColumnSort(colId: string): void {
+    toggleColumnSort(
+      colId: string,
+      event?: Pick<MouseEvent, "shiftKey" | "ctrlKey" | "metaKey">,
+    ): void {
       ctx.getStore().batch(() => {
         const state = ctx.getStore().getState();
-        const current = state.columns.find((column) => column.colId === colId)?.sort ?? null;
-        const nextSort = toggleColumnSort(current);
-        const columns = applySingleColumnSort(state.columns, colId, nextSort);
+        const options = ctx.getOptions() as GridOptions;
+        const additive = isAdditiveSort(options, event);
+        const columns = toggleColumnSortInColumns(state.columns, colId, additive);
         const nextModel = getSortModel(columns);
         const previousModel = getSortModel(state.columns);
         if (sortModelsEqual(previousModel, nextModel)) return;
@@ -53,7 +90,6 @@ export function createSortController(ctx: GridContext) {
         engine.getColumnModel().setColumnState(columns);
         ctx.getStore().dispatch({ type: "SET_COLUMNS", columns });
         engine.rebuildRowModel(columns);
-        const options = ctx.getOptions() as GridOptions;
         options.sortModel = nextModel;
         engine.dispatchGridEvent("sortChanged", { api: ctx.getApi(), source: "uiColumnSorted" });
       });
@@ -92,9 +128,9 @@ export type SortController = ReturnType<typeof createSortController>;
 export const SortModule: GridModule = {
   name: SORT_MODULE_NAME,
   version: "0.0.0",
-  rowModelStages: [createSortStage()],
   onGridCreate(ctx) {
     ctx.getEngine().setSortController(createSortController(ctx));
+    ctx.registerRowModelStage(createSortStage(ctx));
   },
   onGridDestroy(ctx) {
     ctx.getEngine().setSortController(null);
@@ -104,8 +140,11 @@ export const SortModule: GridModule = {
 export { compareValues } from "./compare-values.js";
 export {
   sortRowNodes,
+  sortRowNodesMulti,
   toggleColumnSort,
   applySingleColumnSort,
+  applyAdditiveColumnSort,
+  toggleColumnSortInColumns,
   applySortModel,
   getSortModel,
 } from "./sort.js";

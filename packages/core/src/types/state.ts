@@ -23,6 +23,13 @@ export interface SortingState {
   sortModel: Array<{ colId: string; sort: "asc" | "desc" }>;
 }
 
+export interface PaginationState {
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  totalRows: number;
+}
+
 export interface GridState {
   gridId: string;
   rowDataVersion: number;
@@ -34,6 +41,7 @@ export interface GridState {
   viewportWidth: number;
   viewportHeight: number;
   sorting?: SortingState;
+  pagination?: PaginationState;
   selection?: SelectionState;
   focusedCell: CellPosition | null;
   focusedHeaderColId: string | null;

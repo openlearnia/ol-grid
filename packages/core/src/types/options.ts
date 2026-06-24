@@ -13,6 +13,8 @@ export type RowSelectionOption = "single" | "multiple";
 
 export type SortModel = Array<{ colId: string; sort: "asc" | "desc" }>;
 
+export type MultiSortKey = "shift" | "ctrl";
+
 export interface InfiniteGetRowsParams<TData = unknown> {
   startRow: number;
   endRow: number;
@@ -33,6 +35,24 @@ export interface GridOptions<TData = unknown> extends GridEvents<TData> {
   columnDefs?: ColumnDef<TData>[];
   defaultColDef?: Partial<ColumnDef<TData>>;
   sortModel?: SortModel;
+  /** Modifier for additive multi-column sort (default `'shift'`). */
+  multiSortKey?: MultiSortKey;
+  /** When true, disable shift/ctrl multi-column sort. */
+  suppressMultiSort?: boolean;
+  /** When true, every header click adds to the sort model without a modifier. */
+  alwaysMultiSort?: boolean;
+  /** Enable client-side pagination (disables row virtualization). */
+  pagination?: boolean;
+  /** Rows per page when pagination is enabled (default 100). */
+  paginationPageSize?: number;
+  /** Page size choices in the pagination panel (default `[20, 50, 100]`). */
+  paginationPageSizeSelector?: number[];
+  /** Hide the default pagination panel while keeping API pagination. */
+  suppressPaginationPanel?: boolean;
+  /** When true, do not reset to page 0 on filter/sort changes. */
+  suppressPaginationOnFilter?: boolean;
+  /** Controlled 0-based page index when pagination is enabled. */
+  paginationPage?: number;
   rowData?: TData[];
   rowModelType?: RowModelType;
   datasource?: InfiniteDatasource<TData>;

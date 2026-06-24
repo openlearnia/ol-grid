@@ -12,6 +12,7 @@ export interface RenderColumn {
   width: number;
   left: number;
   sort: "asc" | "desc" | null;
+  sortIndex?: number | null;
   sortable: boolean;
   pinned: "left" | "right" | null;
   isSelectionColumn?: boolean;
@@ -87,6 +88,15 @@ export interface RenderFrame {
   centerHeaderRows: RenderHeaderRow[];
   pinnedRightHeaderRows: RenderHeaderRow[];
   localeText: Record<string, string>;
+  pagination?: {
+    enabled: boolean;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+    totalRows: number;
+    pageSizeSelector: number[];
+    suppressPanel: boolean;
+  };
 }
 
 export interface RendererAdapter {

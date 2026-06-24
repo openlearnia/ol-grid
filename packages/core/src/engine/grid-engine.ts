@@ -42,6 +42,7 @@ import type {
   DisplayedColumnsChangedEvent,
   FilterChangedEvent,
   FilterOpenedEvent,
+  PaginationChangedEvent,
   SelectionChangedEvent,
   SortChangedEvent,
 } from "../types/events.js";
@@ -62,6 +63,7 @@ type GridEventCallbackMap = {
   filterChanged: FilterChangedEvent;
   selectionChanged: SelectionChangedEvent;
   sortChanged: SortChangedEvent;
+  paginationChanged: PaginationChangedEvent;
   displayedColumnsChanged: DisplayedColumnsChangedEvent;
   filterOpened: FilterOpenedEvent;
 };
@@ -72,15 +74,37 @@ const GRID_EVENT_OPTION_KEYS: {
   filterChanged: "onFilterChanged",
   selectionChanged: "onSelectionChanged",
   sortChanged: "onSortChanged",
+  paginationChanged: "onPaginationChanged",
   displayedColumnsChanged: "onDisplayedColumnsChanged",
   filterOpened: "onFilterOpened",
 };
 
 interface SortControllerLike {
-  toggleColumnSort(colId: string): void;
+  toggleColumnSort(
+    colId: string,
+    event?: Pick<MouseEvent, "shiftKey" | "ctrlKey" | "metaKey">,
+  ): void;
   getSortModel(): SortModel;
   setSortModel(model: SortModel, source?: "api" | "uiColumnSorted"): void;
   rebuildFromColumns(columns: ColumnState[]): void;
+}
+
+interface PaginationControllerLike {
+  isEnabled(): boolean;
+  getStageContext(): { enabled: boolean; page: number; pageSize: number };
+  beforeRowModelRebuild(): void;
+  onRowModelRebuilt(): void;
+  getPageSizeSelector(): number[];
+  shouldSuppressPanel(): boolean;
+  paginationGetCurrentPage(): number;
+  paginationGetTotalPages(): number;
+  paginationGetPageSize(): number;
+  paginationGoToPage(page: number): void;
+  paginationGoToFirstPage(): void;
+  paginationGoToLastPage(): void;
+  paginationGoToNextPage(): void;
+  paginationGoToPreviousPage(): void;
+  paginationSetPageSize(size: number): void;
 }
 
 interface InfiniteRowModelControllerLike {
@@ -289,6 +313,33 @@ function createGridApi<TData>(
     setSortModel(model) {
       engine.setSortModel(model);
     },
+    paginationGetCurrentPage() {
+      return engine.paginationGetCurrentPage();
+    },
+    paginationGetTotalPages() {
+      return engine.paginationGetTotalPages();
+    },
+    paginationGetPageSize() {
+      return engine.paginationGetPageSize();
+    },
+    paginationGoToPage(page) {
+      engine.paginationGoToPage(page);
+    },
+    paginationGoToFirstPage() {
+      engine.paginationGoToFirstPage();
+    },
+    paginationGoToLastPage() {
+      engine.paginationGoToLastPage();
+    },
+    paginationGoToNextPage() {
+      engine.paginationGoToNextPage();
+    },
+    paginationGoToPreviousPage() {
+      engine.paginationGoToPreviousPage();
+    },
+    paginationSetPageSize(size) {
+      engine.paginationSetPageSize(size);
+    },
     autoSizeColumn(colKey, skipHeader) {
       engine.autoSizeColumn(colKey, skipHeader);
     },
@@ -335,6 +386,7 @@ function toRenderColumn<TData>(
     width: column.width,
     left: column.left,
     sort: column.sort,
+    sortIndex: column.sortIndex,
     sortable: column.isSelectionColumn ? false : column.def.sortable !== false,
     pinned: column.pinned,
     isSelectionColumn: column.isSelectionColumn,
@@ -362,6 +414,7 @@ export class GridEngine<TData = unknown> {
   private moduleContexts: import("../modules/grid-context.js").GridContext[] = [];
   private rowModelStages: RowModelStage[] = [];
   private sortController: SortControllerLike | null = null;
+  private paginationController: PaginationControllerLike | null = null;
   private filterController: FilterControllerLike | null = null;
   private infiniteRowModel: InfiniteRowModelLike<TData> | null = null;
   private infiniteController: InfiniteRowModelControllerLike | null = null;
@@ -534,6 +587,18 @@ export class GridEngine<TData = unknown> {
     this.sortController = controller;
   }
 
+  setPaginationController(controller: PaginationControllerLike | null): void {
+    this.paginationController = controller;
+  }
+
+  getPaginationController(): PaginationControllerLike | null {
+    return this.paginationController;
+  }
+
+  isPaginationEnabled(): boolean {
+    return this.paginationController?.isEnabled() ?? false;
+  }
+
   setFilterController(controller: FilterControllerLike | null): void {
     this.filterController = controller;
   }
@@ -595,6 +660,7 @@ export class GridEngine<TData = unknown> {
   }
 
   rebuildRowModel(columns = this.store.getState().columns): void {
+    this.paginationController?.beforeRowModelRebuild();
     const sortModel = readSortModel(columns);
     const filterModel = this.getFilterModel();
     const quickFilterText = this.options.quickFilterText ?? "";
@@ -606,6 +672,7 @@ export class GridEngine<TData = unknown> {
     }
 
     this.rowModel.setFilterModel(filterModel);
+    this.rowModel.setPaginationContext(this.paginationController?.getStageContext());
     this.rowModel.rebuild(
       sortModel,
       filterModel,
@@ -614,6 +681,7 @@ export class GridEngine<TData = unknown> {
       this.options.context ?? null,
     );
     this.store.dispatch({ type: "SET_ROW_COUNT", rowCount: this.rowModel.getRowCount() });
+    this.paginationController?.onRowModelRebuilt();
   }
 
   private initModules(perGridModules: GridModule[]): void {
@@ -659,6 +727,7 @@ export class GridEngine<TData = unknown> {
     this.moduleContexts = [];
     this.activeModules = [];
     this.sortController = null;
+    this.paginationController = null;
     this.filterController = null;
     this.infiniteController = null;
     this.infiniteRowModel = null;
@@ -676,15 +745,7 @@ export class GridEngine<TData = unknown> {
   ): RowVirtualRange {
     const state = this.store.getState();
     const top = scrollTop ?? state.scrollTop;
-    const directional = overscanOverride ?? this.resolveDirectionalOverscan(top);
-    return computeRowVirtualRange({
-      rowCount: this.getActiveRowCount(),
-      rowHeight: this.rowHeight,
-      scrollTop: top,
-      viewportHeight: state.viewportHeight,
-      overscanBefore: directional.overscanBefore,
-      overscanAfter: directional.overscanAfter,
-    });
+    return this.resolveVirtualRange(top, state.viewportHeight, overscanOverride);
   }
 
   /**
@@ -698,15 +759,11 @@ export class GridEngine<TData = unknown> {
     if (!this.renderer || this.destroyed) return;
 
     const state = this.store.getState();
-    const directional = overscan ?? this.resolveDirectionalOverscan(scrollTop);
-    const virtualRange = computeRowVirtualRange({
-      rowCount: this.getActiveRowCount(),
-      rowHeight: this.rowHeight,
+    const virtualRange = this.resolveVirtualRange(
       scrollTop,
-      viewportHeight: state.viewportHeight,
-      overscanBefore: directional.overscanBefore,
-      overscanAfter: directional.overscanAfter,
-    });
+      state.viewportHeight,
+      overscan,
+    );
 
     const frame = this.buildRenderFrame(state, virtualRange);
     this.lastFrame = frame;
@@ -1462,9 +1519,12 @@ export class GridEngine<TData = unknown> {
     this.eventBus.clear();
   }
 
-  toggleColumnSort(colId: string): void {
+  toggleColumnSort(
+    colId: string,
+    event?: Pick<MouseEvent, "shiftKey" | "ctrlKey" | "metaKey">,
+  ): void {
     if (this.sortController) {
-      this.sortController.toggleColumnSort(colId);
+      this.sortController.toggleColumnSort(colId, event);
       return;
     }
   }
@@ -1479,6 +1539,59 @@ export class GridEngine<TData = unknown> {
       this.sortController.setSortModel(model, source);
       return;
     }
+  }
+
+  paginationGetCurrentPage(): number {
+    this.requirePaginationModule();
+    return this.paginationController?.paginationGetCurrentPage() ?? 0;
+  }
+
+  paginationGetTotalPages(): number {
+    this.requirePaginationModule();
+    return this.paginationController?.paginationGetTotalPages() ?? 0;
+  }
+
+  paginationGetPageSize(): number {
+    this.requirePaginationModule();
+    return this.paginationController?.paginationGetPageSize() ?? 100;
+  }
+
+  paginationGoToPage(page: number): void {
+    this.requirePaginationModule();
+    this.paginationController?.paginationGoToPage(page);
+  }
+
+  paginationGoToFirstPage(): void {
+    this.requirePaginationModule();
+    this.paginationController?.paginationGoToFirstPage();
+  }
+
+  paginationGoToLastPage(): void {
+    this.requirePaginationModule();
+    this.paginationController?.paginationGoToLastPage();
+  }
+
+  paginationGoToNextPage(): void {
+    this.requirePaginationModule();
+    this.paginationController?.paginationGoToNextPage();
+  }
+
+  paginationGoToPreviousPage(): void {
+    this.requirePaginationModule();
+    this.paginationController?.paginationGoToPreviousPage();
+  }
+
+  paginationSetPageSize(size: number): void {
+    this.requirePaginationModule();
+    this.paginationController?.paginationSetPageSize(size);
+  }
+
+  private requirePaginationModule(): void {
+    requireGridModule(
+      this.hasActiveModule("PaginationModule"),
+      "PaginationModule",
+      "@ol-grid/pagination",
+    );
   }
 
   handleRowClick(
@@ -1662,6 +1775,33 @@ export class GridEngine<TData = unknown> {
     };
   }
 
+  private resolveVirtualRange(
+    scrollTop: number,
+    viewportHeight: number,
+    overscan?: { overscanBefore?: number; overscanAfter?: number },
+  ): RowVirtualRange {
+    const rowCount = this.getActiveRowCount();
+    if (this.isPaginationEnabled()) {
+      const totalHeight = Math.max(rowCount * this.rowHeight, viewportHeight);
+      return {
+        rowStart: 0,
+        rowEnd: Math.max(0, rowCount - 1),
+        rowOffset: 0,
+        totalHeight,
+      };
+    }
+
+    const directional = overscan ?? this.resolveDirectionalOverscan(scrollTop);
+    return computeRowVirtualRange({
+      rowCount,
+      rowHeight: this.rowHeight,
+      scrollTop,
+      viewportHeight,
+      overscanBefore: directional.overscanBefore,
+      overscanAfter: directional.overscanAfter,
+    });
+  }
+
   private refresh(): void {
     if (!this.renderer || this.destroyed) return;
 
@@ -1671,14 +1811,11 @@ export class GridEngine<TData = unknown> {
     this.syncSelectionColumn();
 
     const directional = this.resolveDirectionalOverscan(state.scrollTop);
-    const virtualRange = computeRowVirtualRange({
-      rowCount: this.getActiveRowCount(),
-      rowHeight: this.rowHeight,
-      scrollTop: state.scrollTop,
-      viewportHeight: state.viewportHeight,
-      overscanBefore: directional.overscanBefore,
-      overscanAfter: directional.overscanAfter,
-    });
+    const virtualRange = this.resolveVirtualRange(
+      state.scrollTop,
+      state.viewportHeight,
+      directional,
+    );
 
     if (this.infiniteRowModel) {
       this.infiniteRowModel.ensureRangeLoaded(virtualRange.rowStart, virtualRange.rowEnd + 1);
@@ -1798,7 +1935,22 @@ export class GridEngine<TData = unknown> {
         noRowsToShow: this.getLocaleText("noRowsToShow"),
         loadingOoo: this.getLocaleText("loadingOoo"),
         errorLoading: this.getLocaleText("errorLoading"),
+        page: this.getLocaleText("page"),
+        pageSize: this.getLocaleText("pageSize"),
+        of: this.getLocaleText("of"),
       },
+      pagination:
+        state.pagination && this.isPaginationEnabled()
+          ? {
+              enabled: true,
+              page: state.pagination.page,
+              pageSize: state.pagination.pageSize,
+              totalPages: state.pagination.totalPages,
+              totalRows: state.pagination.totalRows,
+              pageSizeSelector: this.paginationController?.getPageSizeSelector() ?? [20, 50, 100],
+              suppressPanel: this.paginationController?.shouldSuppressPanel() ?? false,
+            }
+          : undefined,
     };
   }
 

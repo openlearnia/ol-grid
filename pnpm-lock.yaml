@@ -229,6 +229,19 @@ importers:
         specifier: ^5.8.2
         version: 5.9.3
 
+  packages/pagination:
+    dependencies:
+      '@ol-grid/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.1(postcss@8.5.15)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.3
+
   packages/react:
     dependencies:
       '@ol-grid/core':
@@ -240,6 +253,9 @@ importers:
       '@ol-grid/filter':
         specifier: workspace:*
         version: link:../filter
+      '@ol-grid/pagination':
+        specifier: workspace:*
+        version: link:../pagination
       '@ol-grid/sort':
         specifier: workspace:*
         version: link:../sort

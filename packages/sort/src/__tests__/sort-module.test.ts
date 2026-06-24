@@ -54,4 +54,37 @@ describe("SortModule integration", () => {
     expect(roles).toEqual(["Designer", "Engineer", "PM"]);
     engine.destroy();
   });
+
+  it("applies multi-column sort model in pipeline order", () => {
+    interface Employee {
+      country: string;
+      city: string;
+    }
+
+    const engine = createGridEngine<Employee>({
+      modules: [SortModule],
+      columnDefs: [
+        { field: "country", headerName: "Country", width: 120 },
+        { field: "city", headerName: "City", width: 120 },
+      ],
+      rowData: [
+        { country: "US", city: "Boston" },
+        { country: "US", city: "Austin" },
+        { country: "UK", city: "London" },
+      ],
+    });
+
+    engine.getApi().setSortModel([
+      { colId: "country", sort: "asc" },
+      { colId: "city", sort: "asc" },
+    ]);
+
+    const cities: string[] = [];
+    engine.getRowModel().forEachNode((node) => {
+      cities.push(node.data?.city ?? "");
+    });
+
+    expect(cities).toEqual(["London", "Austin", "Boston"]);
+    engine.destroy();
+  });
 });

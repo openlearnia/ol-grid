@@ -1,5 +1,5 @@
 {
-  "name": "@ol-grid/react",
+  "name": "@ol-grid/pagination",
   "version": "0.0.0",
   "type": "module",
   "sideEffects": false,
@@ -21,21 +21,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ol-grid/core": "workspace:*",
-    "@ol-grid/dom-renderer": "workspace:*",
-    "@ol-grid/filter": "workspace:*",
-    "@ol-grid/pagination": "workspace:*",
-    "@ol-grid/sort": "workspace:*"
-  },
-  "peerDependencies": {
-    "react": ">=18",
-    "react-dom": ">=18"
+    "@ol-grid/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/react": "^19.0.10",
-    "@types/react-dom": "^19.0.4",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
     "tsup": "^8.4.0",
     "typescript": "^5.8.2"
   }

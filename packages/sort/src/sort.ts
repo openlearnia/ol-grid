@@ -116,6 +116,135 @@ export function applySingleColumnSort(
   }));
 }
 
+function reindexSortedColumns(columns: ColumnState[]): ColumnState[] {
+  const active = columns
+    .filter((column) => column.sort === "asc" || column.sort === "desc")
+    .sort((left, right) => (left.sortIndex ?? 0) - (right.sortIndex ?? 0));
+
+  return columns.map((column) => {
+    const index = active.findIndex((entry) => entry.colId === column.colId);
+    if (index < 0) {
+      return { ...column, sort: null, sortIndex: null };
+    }
+    const entry = active[index]!;
+    return { ...column, sort: entry.sort, sortIndex: index };
+  });
+}
+
+/** Shift+click / additive multi-sort: append or cycle one column without clearing others. */
+export function applyAdditiveColumnSort(
+  columns: ColumnState[],
+  colId: string,
+  nextSort: "asc" | "desc" | null,
+): ColumnState[] {
+  if (nextSort === null) {
+    const without = columns.map((column) =>
+      column.colId === colId ? { ...column, sort: null, sortIndex: null } : column,
+    );
+    return reindexSortedColumns(without);
+  }
+
+  const others = columns
+    .filter(
+      (column) =>
+        column.colId !== colId && (column.sort === "asc" || column.sort === "desc"),
+    )
+    .sort((left, right) => (left.sortIndex ?? 0) - (right.sortIndex ?? 0));
+
+  const sortIndex = others.length;
+
+  return columns.map((column) => {
+    if (column.colId === colId) {
+      return { ...column, sort: nextSort, sortIndex };
+    }
+    const index = others.findIndex((entry) => entry.colId === column.colId);
+    if (index >= 0) {
+      return { ...column, sortIndex: index };
+    }
+    return column;
+  });
+}
+
+export function toggleColumnSortInColumns(
+  columns: ColumnState[],
+  colId: string,
+  additive: boolean,
+): ColumnState[] {
+  const current = columns.find((column) => column.colId === colId)?.sort ?? null;
+  const nextSort = toggleColumnSort(current);
+  return additive
+    ? applyAdditiveColumnSort(columns, colId, nextSort)
+    : applySingleColumnSort(columns, colId, nextSort);
+}
+
+export interface MultiSortEntry<TData> {
+  colId: string;
+  sort: "asc" | "desc";
+  getValue: (node: RowNode<TData>) => unknown;
+  comparator?: SortComparatorFn<TData, unknown>;
+}
+
+export function sortRowNodesMulti<TData>(
+  nodes: RowNode<TData>[],
+  entries: MultiSortEntry<TData>[],
+): RowNode<TData>[] {
+  if (entries.length === 0) return nodes;
+  if (entries.length === 1) {
+    const entry = entries[0]!;
+    return sortRowNodes(nodes, entry.sort, entry.getValue, entry.comparator);
+  }
+
+  const length = nodes.length;
+  if (length <= 1) return nodes;
+
+  const indices = new Uint32Array(length);
+  for (let index = 0; index < length; index++) {
+    indices[index] = index;
+  }
+
+  const cachedValues = entries.map((entry) => {
+    if (!entry.comparator) return null;
+    const values = new Array<unknown>(length);
+    for (let index = 0; index < length; index++) {
+      values[index] = entry.getValue(nodes[index]!);
+    }
+    return values;
+  });
+
+  indices.sort((left, right) => {
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+      const entry = entries[entryIndex]!;
+      const direction = entry.sort === "asc" ? 1 : -1;
+      const isDescending = entry.sort === "desc";
+      let cmp = 0;
+
+      if (entry.comparator) {
+        const values = cachedValues[entryIndex]!;
+        cmp = entry.comparator(
+          values![left]!,
+          values![right]!,
+          nodes[left]!,
+          nodes[right]!,
+          isDescending,
+        );
+      } else {
+        const leftValue = entry.getValue(nodes[left]!);
+        const rightValue = entry.getValue(nodes[right]!);
+        cmp = compareValues(leftValue, rightValue);
+      }
+
+      if (cmp !== 0) return cmp * direction;
+    }
+    return left - right;
+  });
+
+  const result = new Array<RowNode<TData>>(length);
+  for (let index = 0; index < length; index++) {
+    result[index] = nodes[indices[index]!]!;
+  }
+  return result;
+}
+
 export function applySortModel(
   columns: ColumnState[],
   sortModel: Array<{ colId: string; sort: "asc" | "desc" }>,

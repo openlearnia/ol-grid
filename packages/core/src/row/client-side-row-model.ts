@@ -18,6 +18,7 @@ export class ClientSideRowModel<TData = unknown> {
   private filterModel: Record<string, unknown> = {};
   private sortModel: Array<{ colId: string; sort: "asc" | "desc" }> = [];
   private pipelineStages: RowModelStage[] = [];
+  private paginationContext: RowModelStageContext["pagination"] = undefined;
   private getRowIdFn: (params: GetRowIdParams<TData>) => string = ({ index }) =>
     String(index);
 
@@ -47,6 +48,10 @@ export class ClientSideRowModel<TData = unknown> {
 
   setPipelineStages(stages: RowModelStage[]): void {
     this.pipelineStages = [...stages].sort((left, right) => left.order - right.order);
+  }
+
+  setPaginationContext(pagination: RowModelStageContext["pagination"]): void {
+    this.paginationContext = pagination;
   }
 
   getRowCount(): number {
@@ -137,6 +142,7 @@ export class ClientSideRowModel<TData = unknown> {
       context,
       sortModel: this.sortModel,
       filterModel: this.filterModel,
+      pagination: this.paginationContext,
     };
 
     let rows: RowNode<TData>[] = this.filteredNodes;

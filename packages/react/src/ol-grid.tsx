@@ -7,6 +7,7 @@ import {
 } from "@ol-grid/core";
 import { SortModule } from "@ol-grid/sort";
 import { FilterModule } from "@ol-grid/filter";
+import { PaginationModule } from "@ol-grid/pagination";
 import { createDomRenderer } from "@ol-grid/dom-renderer";
 import {
   forwardRef,
@@ -20,6 +21,7 @@ import { useCellRendererPortals } from "./cell-renderer-portals.js";
 
 let sortModuleRegistered = false;
 let filterModuleRegistered = false;
+let paginationModuleRegistered = false;
 
 function ensureSortModuleRegistered(): void {
   if (sortModuleRegistered) return;
@@ -31,6 +33,12 @@ function ensureFilterModuleRegistered(): void {
   if (filterModuleRegistered) return;
   ModuleRegistry.register(FilterModule);
   filterModuleRegistered = true;
+}
+
+function ensurePaginationModuleRegistered(): void {
+  if (paginationModuleRegistered) return;
+  ModuleRegistry.register(PaginationModule);
+  paginationModuleRegistered = true;
 }
 
 export interface OlGridHandle<TData = unknown> {
@@ -58,6 +66,9 @@ const GRID_OPTION_KEYS = [
   "quickFilterText",
   "sortModel",
   "filterModel",
+  "pagination",
+  "paginationPageSize",
+  "paginationPage",
   "selectedRowIds",
   "defaultColDef",
   "theme",
@@ -85,10 +96,11 @@ function syncGridOptions<TData>(
 function createEngine<TData>(options: GridOptions<TData>): GridEngine<TData> {
   ensureSortModuleRegistered();
   ensureFilterModuleRegistered();
+  ensurePaginationModuleRegistered();
   return createGridEngine({
     ...options,
     frameworkCellRenderers: true,
-    modules: [...(options.modules ?? []), SortModule, FilterModule],
+    modules: [...(options.modules ?? []), SortModule, FilterModule, PaginationModule],
   });
 }
 
