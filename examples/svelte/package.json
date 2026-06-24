@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@ol-grid/svelte": "workspace:*",
-    "@ol-grid/dom-renderer": "workspace:*"
+    "@ol-grid/dom-renderer": "workspace:*",
+    "@ol-grid/locale-en": "workspace:*"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",

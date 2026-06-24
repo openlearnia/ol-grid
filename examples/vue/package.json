@@ -12,6 +12,7 @@
   "dependencies": {
     "@ol-grid/vue": "workspace:*",
     "@ol-grid/dom-renderer": "workspace:*",
+    "@ol-grid/locale-en": "workspace:*",
     "vue": "^3.5.13"
   },
   "devDependencies": {

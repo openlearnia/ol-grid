@@ -41,6 +41,10 @@ export const OlGrid = defineComponent({
     quickFilterText: { type: String, default: undefined },
     filterModel: { type: Object as PropType<GridOptions["filterModel"]>, default: undefined },
     selectedRowIds: { type: Array as PropType<GridOptions["selectedRowIds"]>, default: undefined },
+    theme: { type: String as PropType<GridOptions["theme"]>, default: undefined },
+    locale: { type: String as PropType<GridOptions["locale"]>, default: undefined },
+    localeText: { type: Object as PropType<GridOptions["localeText"]>, default: undefined },
+    localeBundle: { type: Object as PropType<GridOptions["localeBundle"]>, default: undefined },
     modules: { type: Array as PropType<GridOptions["modules"]>, default: undefined },
     onGridReady: { type: Function as PropType<GridOptions["onGridReady"]>, default: undefined },
     onSelectionChanged: {

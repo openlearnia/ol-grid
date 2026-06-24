@@ -34,6 +34,10 @@ export const GRID_OPTION_KEYS = [
   "filterModel",
   "selectedRowIds",
   "defaultColDef",
+  "theme",
+  "locale",
+  "localeText",
+  "localeBundle",
 ] as const satisfies readonly (keyof GridOptions<unknown>)[];
 
 export function createAdapterEngine<TData>(options: GridOptions<TData>): GridEngine<TData> {

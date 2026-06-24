@@ -3,8 +3,8 @@
 > **Authoritative product spec:** [REQUIREMENTS.md](./REQUIREMENTS.md)  
 > **Architecture:** [ARCHITECTURE.md](./ARCHITECTURE.md)  
 > **Feature specs:** [requirements/README.md](./requirements/README.md)  
-> **Last audited:** 2026-06-22 (evidence-corrected)  
-> **Tests:** 211 passing · 214 total · 46 test files · **Packages shipped:** 10 (`core`, `dom-renderer`, `sort`, `filter`, `infinite-row-model`, `locale-en`, `react`, `vanilla`, `vue`, `svelte`)  
+> **Last audited:** 2026-06-24 (Vue/Svelte filter demo parity)  
+> **Tests:** 223 passing · 223 total · 48 test files · **Packages shipped:** 10 (`core`, `dom-renderer`, `sort`, `filter`, `infinite-row-model`, `locale-en`, `react`, `vanilla`, `vue`, `svelte`)  
 > **CI:** Node 24 · pnpm 11.8.0 · build · typecheck · test · bundle-size gate · axe-core (vanilla demo) — `perf-100k` manual only, not in CI
 
 ---
@@ -15,7 +15,7 @@
 |--------|-------|
 | **Current phase** | **Phase 1 — Foundation (MVP)** largely complete; **Phase 2 — Editing & Data** in progress (Sprints 1–7 done) |
 | **Tier 1 completion** | **~76%** (core T1 feature set + quality gates shipped; API docs + migration parity remain) |
-| **Tier 2 completion** | **~65%** (Sprint 8 column groups + sizing + i18n + dark mode done; drag reorder deferred; Vue/Svelte partial) |
+| **Tier 2 completion** | **~68%** (Sprint 8 column groups + sizing + i18n + dark mode done; drag reorder deferred; Vue/Svelte filter demo parity done) |
 | **Tier 3 completion** | **~0%** (specs only) |
 | **Overall v1 scope** | **~32%** (weighted across T1–T3) |
 
@@ -23,7 +23,7 @@
 
 **Critical gaps before Tier 1 exit:** API docs (`GridOptions`, `GridApi`, Tier 1 events), AG Grid getting-started tutorial parity (≤20% mapping changes), 100k perf benchmark in CI.
 
-**Critical gaps before Tier 2 exit (Sprint 8–9):** column drag reorder (deferred), RTL + custom filter components, Vue/Svelte column-filter demo parity, multi-column sort, client pagination, migration guide, TypeDoc.
+**Critical gaps before Tier 2 exit (Sprint 8–9):** column drag reorder (deferred), RTL + custom filter components, multi-column sort, client pagination, migration guide, TypeDoc.
 
 ---
 
@@ -73,7 +73,7 @@ Target: AG Grid Community parity for admin grids; Vue + Svelte; filtering; infin
 | Infinite row model | `@ol-grid/infinite-row-model` | **Done** (T2) — datasource contract, block cache, mock REST demo |
 | Pagination mode | `@ol-grid/pagination` | Not started |
 | CSV export (full params) | `@ol-grid/core` | **Done** (T2) — `getDataAsCsv`, `onlySelected`, `processCellCallback` |
-| Vue + Svelte adapters | `@ol-grid/vue`, `@ol-grid/svelte` | **Partial** (T2) — composable/component, `bind:api`, controlled slices; demos lack column filters vs React/vanilla |
+| Vue + Svelte adapters | `@ol-grid/vue`, `@ol-grid/svelte` | **Partial** (T2) — composable/component, `bind:api`, controlled slices, column-filter demos; cell-renderer portals still open |
 | i18n + RTL | `@ol-grid/locale-*` | **Partial** — `@ol-grid/locale-en` + `localeText`; RTL not started |
 | Controlled mode per state slice | adapters + core | **Done** — `sortModel`, `filterModel`, `rowSelection` controlled in React/Vue/Svelte |
 | Column groups, drag reorder, auto-size API | `@ol-grid/core` | **Partial** — `buildHeaderRows`, `autoSizeAllColumns` / `sizeColumnsToFit` done; drag reorder deferred |
@@ -120,7 +120,7 @@ Target: canvas renderer, column virtualization, worker offload.
 | Selection | T1–T2 | [selection.md](./requirements/selection.md) | **Done** (T1) | Cell range selection (T3) | Range selection module (Tier 3) | `@ol-grid/core` |
 | Keyboard navigation | T1–T3 | [keyboard-navigation.md](./requirements/keyboard-navigation.md) | **Done** (T1) | Tab between non-edit cells edge cases | Audit Tab vs edit-mode behavior | `@ol-grid/core`, dom-renderer |
 | Theming | T1–T2 | [theming.md](./requirements/theming.md) | **Partial** | Alpine theme package; separate `@ol-grid/themes`; full token audit | Split `theme.css`; add Alpine package | `@ol-grid/dom-renderer`, `@ol-grid/themes` |
-| Framework adapters | T1–T3 | [framework-adapters.md](./requirements/framework-adapters.md) | **Partial** | Angular/WC; Vue/Svelte cell-renderer portals; Vue/Svelte column-filter demo parity | Sprint 15+ Angular/WC; portal + filter demo parity | `@ol-grid/react`, `@ol-grid/vanilla`, `@ol-grid/vue`, `@ol-grid/svelte` |
+| Framework adapters | T1–T3 | [framework-adapters.md](./requirements/framework-adapters.md) | **Partial** | Angular/WC; Vue/Svelte cell-renderer portals | Sprint 15+ Angular/WC; Vue/Svelte portal parity | `@ol-grid/react`, `@ol-grid/vanilla`, `@ol-grid/vue`, `@ol-grid/svelte` |
 | Accessibility | T1–T3 | [accessibility.md](./requirements/accessibility.md) | **Partial** | Live regions; full WCAG AA audit; canvas companion DOM (T3) | Live region for async updates; manual audit | core + renderers |
 | Performance & bundle | T1–T3 | [performance-and-bundle.md](./requirements/performance-and-bundle.md) | **Partial** (bundle gate only) | 100k perf manual (`benchmarks/perf-100k`, not CI); 1M-row canvas (T3); perf regression CI (Should) | Add perf-100k to CI (Should); Sprint 19+ canvas | all packages |
 | AG Grid migration | T1–T3 | [ag-grid-migration.md](./requirements/ag-grid-migration.md) | **Not started** | No `@ol-grid/compat-ag-grid`; no migration guide | Sprint 9 migration guide draft | `@ol-grid/compat-ag-grid` (planned) |
@@ -347,7 +347,7 @@ Assuming **2-week sprints**, one engineer (scale tasks horizontally when team gr
 |-----------|--------|
 | Editable grid demo with validation and Tab navigation between cells | **Done** — vanilla + React demos with valueParser, valueSetter, number/select editors, Tab nav |
 | Infinite row model demo against mock REST API | **Done** — `examples/infinite` with mock datasource |
-| Vue and Svelte examples at parity with React basic demo | **Partial** — sort, select, quick filter, CSV; no column filter demos (React/vanilla have text/number/date + floating filters) |
+| Vue and Svelte examples at parity with React basic demo | **Done** — sort, select, quick filter, CSV, text/number/date column filters + floating filters, controlled `filterModel` |
 | CSV export matches displayed (filtered/sorted) data | **Done** — uses `getAllFilteredNodes()` |
 | Migration guide published with side-by-side AG Grid ↔ ol-grid snippets | **Not started** |
 
@@ -414,8 +414,8 @@ Accurate snapshot of `packages/` for planners:
 | **CSV** | `generateCsv`, `exportDataAsCsv`, `getDataAsCsv`, filtered/sorted scope, export params | Excel (T3) |
 | **Overlays** | Loading, no-rows, error overlays in dom-renderer (overlay hidden bug fixed) | — |
 | **Controlled mode** | `sortModel`, `filterModel`, `rowSelection` in React/Vue/Svelte adapters | Additional state slices as needed |
-| **Tests** | 214 tests, 46 files (all passing) | Coverage << 90% target; no visual regression baseline |
-| **Examples** | React, vanilla, vue, svelte, infinite (mock REST) | Vue/Svelte lack column-filter demos; 100k in `benchmarks/` manual only; Angular |
+| **Tests** | 223 tests, 48 files (all passing) | Coverage << 90% target; no visual regression baseline |
+| **Examples** | React, vanilla, vue, svelte, infinite (mock REST) | 100k in `benchmarks/` manual only; Angular; Vue/Svelte lack column groups demo |
 | **CI** | Node 24, pnpm 11.8.0 — build, typecheck, test, bundle-size, axe-core | `perf-100k` not in CI; perf regression gate (Should); TypeDoc |
 
 ---
@@ -430,3 +430,4 @@ Accurate snapshot of `packages/` for planners:
 | 2026-06-22 | Full audit refresh: Sprints 1–7 marked complete; 9 packages, 208 tests/41 files; CI/benchmarks/axe/bundle gates done; Tier 1 ~76%, Tier 2 ~58%; Sprint 8+ unchanged |
 | 2026-06-22 | Sprint 8 complete (except deferred drag reorder): column groups + sizing tests fixed; 214/214 tests passing; PLAN evidence updated |
 | 2026-06-22 | Evidence-corrected pass (prior refresh was sprint-checkbox-led): §8.1 100k → Partial (manual `perf-100k`, not CI); §8.2 Vue/Svelte → Partial (no filter demos); Performance & bundle → Partial (bundle gate only); i18n → Partial (`locale-en` exists); Sprint 8 groups/sizing unchecked (3 failing tests); 10 packages, 214 tests/46 files |
+| 2026-06-24 | Vue/Svelte column-filter demo parity: text/number/date filters + floating filters, controlled `filterModel`, `localeBundle` prop sync; Vue adapter floating-filter test; 223/223 tests passing; §8.2 Vue/Svelte → Done |

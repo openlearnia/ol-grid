@@ -23,6 +23,10 @@
   export let quickFilterText: GridOptions["quickFilterText"] = undefined;
   export let filterModel: GridOptions["filterModel"] = undefined;
   export let selectedRowIds: GridOptions["selectedRowIds"] = undefined;
+  export let theme: GridOptions["theme"] = undefined;
+  export let locale: GridOptions["locale"] = undefined;
+  export let localeText: GridOptions["localeText"] = undefined;
+  export let localeBundle: GridOptions["localeBundle"] = undefined;
   export let modules: GridOptions["modules"] = undefined;
 
   export let onGridReady: GridOptions["onGridReady"] = undefined;
@@ -62,6 +66,10 @@
       quickFilterText,
       filterModel,
       selectedRowIds,
+      theme,
+      locale,
+      localeText,
+      localeBundle,
       modules,
       onGridReady,
       onSelectionChanged,

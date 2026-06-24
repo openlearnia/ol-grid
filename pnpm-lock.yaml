@@ -101,6 +101,9 @@ importers:
       '@ol-grid/dom-renderer':
         specifier: workspace:*
         version: link:../../packages/dom-renderer
+      '@ol-grid/locale-en':
+        specifier: workspace:*
+        version: link:../../packages/locale-en
       '@ol-grid/svelte':
         specifier: workspace:*
         version: link:../../packages/svelte
@@ -139,6 +142,9 @@ importers:
       '@ol-grid/dom-renderer':
         specifier: workspace:*
         version: link:../../packages/dom-renderer
+      '@ol-grid/locale-en':
+        specifier: workspace:*
+        version: link:../../packages/locale-en
       '@ol-grid/vue':
         specifier: workspace:*
         version: link:../../packages/vue
