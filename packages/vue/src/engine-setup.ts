@@ -6,11 +6,13 @@ import {
 } from "@ol-grid/core";
 import { SortModule } from "@ol-grid/sort";
 import { FilterModule } from "@ol-grid/filter";
+import { PaginationModule } from "@ol-grid/pagination";
 
 export const GRID_API_INJECTION_KEY = Symbol("ol-grid-api");
 
 let sortModuleRegistered = false;
 let filterModuleRegistered = false;
+let paginationModuleRegistered = false;
 
 function ensureSortModuleRegistered(): void {
   if (sortModuleRegistered) return;
@@ -24,6 +26,12 @@ function ensureFilterModuleRegistered(): void {
   filterModuleRegistered = true;
 }
 
+function ensurePaginationModuleRegistered(): void {
+  if (paginationModuleRegistered) return;
+  ModuleRegistry.register(PaginationModule);
+  paginationModuleRegistered = true;
+}
+
 export const GRID_OPTION_KEYS = [
   "columnDefs",
   "rowData",
@@ -34,6 +42,10 @@ export const GRID_OPTION_KEYS = [
   "quickFilterText",
   "sortModel",
   "filterModel",
+  "pagination",
+  "paginationPageSize",
+  "paginationPage",
+  "paginationPageSizeSelector",
   "selectedRowIds",
   "defaultColDef",
   "theme",
@@ -47,9 +59,10 @@ export type SyncedGridOptionKey = (typeof GRID_OPTION_KEYS)[number];
 export function createAdapterEngine<TData>(options: GridOptions<TData>): GridEngine<TData> {
   ensureSortModuleRegistered();
   ensureFilterModuleRegistered();
+  ensurePaginationModuleRegistered();
   return createGridEngine({
     ...options,
-    modules: [...(options.modules ?? []), SortModule, FilterModule],
+    modules: [...(options.modules ?? []), SortModule, FilterModule, PaginationModule],
   });
 }
 

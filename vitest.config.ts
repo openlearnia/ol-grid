@@ -13,6 +13,7 @@ export default defineConfig({
       "@ol-grid/core": path.join(root, "packages/core/src/index.ts"),
       "@ol-grid/sort": path.join(root, "packages/sort/src/index.ts"),
       "@ol-grid/filter": path.join(root, "packages/filter/src/index.ts"),
+      "@ol-grid/pagination": path.join(root, "packages/pagination/src/index.ts"),
       "@ol-grid/infinite-row-model": path.join(root, "packages/infinite-row-model/src/index.ts"),
       "@ol-grid/dom-renderer": path.join(root, "packages/dom-renderer/src/index.ts"),
       "@ol-grid/react": path.join(root, "packages/react/src/index.ts"),
@@ -31,6 +32,7 @@ export default defineConfig({
       ["packages/core/src/engine/__tests__/grid-engine*.test.ts", "happy-dom"],
       ["packages/react/**/__tests__/**/*.test.{ts,tsx}", "happy-dom"],
       ["packages/vue/**/__tests__/**/*.test.ts", "happy-dom"],
+      ["packages/svelte/**/__tests__/**/*.test.ts", "happy-dom"],
     ],
   },
 });

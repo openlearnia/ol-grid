@@ -94,4 +94,47 @@ describe("OlGrid (Vue)", () => {
 
     app.unmount();
   });
+
+  it("renders pagination panel and pages rows when pagination is enabled", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+
+    const App = defineComponent({
+      setup() {
+        return () =>
+          h(OlGrid, {
+            columnDefs: [{ field: "name", headerName: "Name", width: 160 }],
+            rowData: [
+              { id: 1, name: "Alice" },
+              { id: 2, name: "Bob" },
+              { id: 3, name: "Carol" },
+              { id: 4, name: "Dave" },
+            ],
+            pagination: true,
+            paginationPageSize: 2,
+            getRowId: ({ data }: { data: { id: number } }) => String(data.id),
+            style: { width: 640, height: 320 },
+          });
+      },
+    });
+
+    const app = createApp(App);
+    app.mount(host);
+    await nextTick();
+
+    expect(host.querySelector(".ol-grid__pagination")).not.toBeNull();
+    expect(host.textContent).toContain("Alice");
+    expect(host.textContent).toContain("Bob");
+    expect(host.textContent).not.toContain("Carol");
+
+    const next = host.querySelector<HTMLButtonElement>('button[aria-label="Next page"]');
+    next?.click();
+    await nextTick();
+
+    expect(host.textContent).toContain("Carol");
+    expect(host.textContent).toContain("Dave");
+    expect(host.textContent).not.toContain("Alice");
+
+    app.unmount();
+  });
 });

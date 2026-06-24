@@ -303,6 +303,9 @@ importers:
       '@ol-grid/filter':
         specifier: workspace:*
         version: link:../filter
+      '@ol-grid/pagination':
+        specifier: workspace:*
+        version: link:../pagination
       '@ol-grid/sort':
         specifier: workspace:*
         version: link:../sort
@@ -359,6 +362,9 @@ importers:
       '@ol-grid/filter':
         specifier: workspace:*
         version: link:../filter
+      '@ol-grid/pagination':
+        specifier: workspace:*
+        version: link:../pagination
       '@ol-grid/sort':
         specifier: workspace:*
         version: link:../sort

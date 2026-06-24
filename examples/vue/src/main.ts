@@ -37,6 +37,7 @@ const App = {
     const quickFilter = ref("");
     const sortModel = ref<Array<{ colId: string; sort: "asc" | "desc" }>>([]);
     const filterModel = ref<Record<string, unknown>>({});
+    const pagination = ref(false);
     const selectedCount = ref(0);
     const visibleCount = ref(rowData.length);
     const gridRef = ref<{ api: import("@ol-grid/core").GridApi<Person> } | null>(null);
@@ -103,6 +104,7 @@ const App = {
       quickFilter,
       sortModel,
       filterModel,
+      pagination,
       selectedCount,
       visibleCount,
       gridRef,
@@ -125,13 +127,25 @@ const App = {
             placeholder="Filter all columns…"
           />
         </label>
+        <label>
+          Pagination
+          <select
+            data-testid="demo-pagination-select"
+            :value="pagination ? 'on' : 'off'"
+            @change="pagination = ($event.target as HTMLSelectElement).value === 'on'"
+          >
+            <option value="off">Off (virtual scroll)</option>
+            <option value="on">On (25 / page)</option>
+          </select>
+        </label>
         <button type="button" data-testid="demo-export-csv" @click="exportCsv">Export CSV</button>
         <span>{{ visibleCount }} rows visible</span>
         <span>{{ selectedCount }} row(s) selected</span>
-        <span>Text/number/date column filters · floating filters on Name &amp; Dept</span>
+        <span>Text/number/date column filters · floating filters · pagination toggle</span>
       </div>
       <div class="demo-grid">
         <OlGrid
+          :key="pagination ? 'paged' : 'virtual'"
           ref="gridRef"
           :column-defs="columnDefs"
           :row-data="rowData"
@@ -139,6 +153,9 @@ const App = {
           :quick-filter-text="quickFilter"
           :sort-model="sortModel"
           :filter-model="filterModel"
+          :pagination="pagination"
+          :pagination-page-size="25"
+          :pagination-page-size-selector="[10, 25, 50, 100]"
           :locale-bundle="localeEn"
           @sort-model-change="sortModel = $event"
           @filter-model-change="filterModel = $event"

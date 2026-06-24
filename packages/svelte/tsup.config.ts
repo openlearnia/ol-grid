@@ -7,5 +7,5 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   target: "es2022",
-  external: ["svelte", "@ol-grid/core", "@ol-grid/dom-renderer", "@ol-grid/sort", "@ol-grid/filter"],
+  external: ["svelte", "@ol-grid/core", "@ol-grid/dom-renderer", "@ol-grid/sort", "@ol-grid/filter", "@ol-grid/pagination"],
 });

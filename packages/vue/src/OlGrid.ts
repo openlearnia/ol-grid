@@ -40,6 +40,16 @@ export const OlGrid = defineComponent({
     context: { type: null as unknown as PropType<GridOptions["context"]>, default: undefined },
     quickFilterText: { type: String, default: undefined },
     filterModel: { type: Object as PropType<GridOptions["filterModel"]>, default: undefined },
+    pagination: { type: Boolean as PropType<GridOptions["pagination"]>, default: undefined },
+    paginationPageSize: {
+      type: Number as PropType<GridOptions["paginationPageSize"]>,
+      default: undefined,
+    },
+    paginationPage: { type: Number as PropType<GridOptions["paginationPage"]>, default: undefined },
+    paginationPageSizeSelector: {
+      type: Array as PropType<GridOptions["paginationPageSizeSelector"]>,
+      default: undefined,
+    },
     selectedRowIds: { type: Array as PropType<GridOptions["selectedRowIds"]>, default: undefined },
     theme: { type: String as PropType<GridOptions["theme"]>, default: undefined },
     locale: { type: String as PropType<GridOptions["locale"]>, default: undefined },

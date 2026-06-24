@@ -79,6 +79,7 @@
   let quickFilter = "";
   let sortModel: Array<{ colId: string; sort: "asc" | "desc" }> = [];
   let filterModel: Record<string, unknown> = {};
+  let pagination = false;
   let selectedCount = 0;
   let visibleCount = rowData.length;
 
@@ -104,12 +105,26 @@
         placeholder="Filter all columns…"
       />
     </label>
+    <label>
+      Pagination
+      <select
+        data-testid="demo-pagination-select"
+        value={pagination ? "on" : "off"}
+        on:change={(event) => {
+          pagination = (event.currentTarget as HTMLSelectElement).value === "on";
+        }}
+      >
+        <option value="off">Off (virtual scroll)</option>
+        <option value="on">On (25 / page)</option>
+      </select>
+    </label>
     <button type="button" data-testid="demo-export-csv" on:click={exportCsv}>Export CSV</button>
     <span>{visibleCount} rows visible</span>
     <span>{selectedCount} row(s) selected</span>
-    <span>Text/number/date column filters · floating filters on Name &amp; Dept</span>
+    <span>Text/number/date column filters · floating filters · pagination toggle</span>
   </div>
   <div class="demo-grid">
+    {#key pagination ? "paged" : "virtual"}
     <OlGrid
       bind:api
       {columnDefs}
@@ -118,6 +133,9 @@
       quickFilterText={quickFilter}
       {sortModel}
       {filterModel}
+      pagination={pagination}
+      paginationPageSize={25}
+      paginationPageSizeSelector={[10, 25, 50, 100]}
       localeBundle={localeEn}
       onSortModelChange={(model) => (sortModel = model)}
       onFilterModelChange={(model) => (filterModel = model)}
@@ -127,5 +145,6 @@
       onFilterChanged={refreshCounts}
       onSortChanged={refreshCounts}
     />
+    {/key}
   </div>
 </div>

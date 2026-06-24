@@ -22,6 +22,10 @@
   export let context: GridOptions["context"] = undefined;
   export let quickFilterText: GridOptions["quickFilterText"] = undefined;
   export let filterModel: GridOptions["filterModel"] = undefined;
+  export let pagination: GridOptions["pagination"] = undefined;
+  export let paginationPageSize: GridOptions["paginationPageSize"] = undefined;
+  export let paginationPage: GridOptions["paginationPage"] = undefined;
+  export let paginationPageSizeSelector: GridOptions["paginationPageSizeSelector"] = undefined;
   export let selectedRowIds: GridOptions["selectedRowIds"] = undefined;
   export let theme: GridOptions["theme"] = undefined;
   export let locale: GridOptions["locale"] = undefined;
@@ -65,6 +69,10 @@
       context,
       quickFilterText,
       filterModel,
+      pagination,
+      paginationPageSize,
+      paginationPage,
+      paginationPageSizeSelector,
       selectedRowIds,
       theme,
       locale,
