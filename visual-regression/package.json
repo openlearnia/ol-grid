@@ -1,0 +1,15 @@
+{
+  "name": "@ol-grid/visual-regression",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "capture": "node ./scripts/capture.mjs",
+    "compare": "VISUAL_REGRESSION=1 vitest run --config ../vitest.config.ts visual-regression"
+  },
+  "devDependencies": {
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
+    "puppeteer": "^24.4.0"
+  }
+}

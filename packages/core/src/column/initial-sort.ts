@@ -3,7 +3,7 @@ import type { ColumnDef, SortDef } from "../types/column.js";
 import type { SortModel } from "../types/options.js";
 
 export function resolveColumnDefInitialSort(
-  def: ColumnDef,
+  def: Pick<ColumnDef, "sort" | "initialSort">,
 ): { sort: "asc" | "desc"; sortIndex?: number } | null {
   // `sort` and `initialSort` are aliases; string form is shorthand for { sort }.
   const raw = def.sort ?? def.initialSort;

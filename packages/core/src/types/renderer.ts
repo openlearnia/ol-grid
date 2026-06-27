@@ -16,7 +16,8 @@ export interface RenderColumn {
   sortable: boolean;
   pinned: "left" | "right" | null;
   isSelectionColumn?: boolean;
-  filterType?: "text" | "number" | "date" | null;
+  filterType?: "text" | "number" | "date" | "custom" | null;
+  customFilterKey?: string | null;
   filterActive?: boolean;
   floatingFilter?: boolean;
   filterParams?: Record<string, unknown>;
@@ -36,6 +37,10 @@ export interface RenderCell {
   frameworkRenderer?: unknown;
   cellRenderer?: string | CellRendererFn;
   cellRendererParams?: Record<string, unknown>;
+  useFrameworkEditor?: boolean;
+  frameworkEditor?: unknown;
+  cellEditorKey?: string;
+  cellEditorParams?: Record<string, unknown>;
 }
 
 export interface RenderRow {

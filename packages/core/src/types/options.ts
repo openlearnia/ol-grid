@@ -104,6 +104,8 @@ export interface GridOptions<TData = unknown> extends GridEvents<TData> {
   modules?: GridModule[];
   /** Set by @ol-grid/react so function cellRenderer values use framework portals. */
   frameworkCellRenderers?: boolean;
+  /** Set by @ol-grid/react so function cellEditor values use framework editor portals. */
+  frameworkCellEditors?: boolean;
   /** BCP 47 locale tag for formatting and built-in UI strings. */
   locale?: string;
   /** Partial override of built-in UI strings (deep-merged over locale bundle). */
@@ -112,4 +114,6 @@ export interface GridOptions<TData = unknown> extends GridEvents<TData> {
   localeBundle?: Partial<LocaleText>;
   /** Visual theme: light, dark, system (prefers-color-scheme), or custom data-ol-theme value. */
   theme?: "light" | "dark" | "system" | string;
+  /** When true, disable header drag reorder and {@link GridApi.moveColumn}. */
+  suppressColumnMove?: boolean;
 }

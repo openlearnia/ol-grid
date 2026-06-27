@@ -320,6 +320,28 @@
   cursor: pointer;
 }
 
+.ol-grid__header-cell--movable {
+  cursor: grab;
+}
+
+.ol-grid__header-cell--dragging {
+  opacity: 0.65;
+  cursor: grabbing;
+  z-index: 2;
+}
+
+.ol-grid__column-move-indicator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ol-grid-accent-color, #3b82f6);
+  pointer-events: none;
+  z-index: 5;
+  display: none;
+}
+
 .ol-grid__header-cell--sortable:hover {
   background: var(--ol-grid-row-hover-bg);
 }

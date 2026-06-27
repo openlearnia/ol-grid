@@ -1,0 +1,60 @@
+{
+  "name": "@ol-grid/drag-and-drop",
+  "version": "0.0.0",
+  "description": "Data-first drag-and-drop lists (vendored from FormKit drag-and-drop, MIT).",
+  "type": "module",
+  "sideEffects": false,
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react/index.d.ts",
+        "default": "./dist/react/index.js"
+      }
+    },
+    "./vue": {
+      "import": {
+        "types": "./dist/vue/index.d.ts",
+        "default": "./dist/vue/index.js"
+      }
+    },
+    "./solid": {
+      "import": {
+        "types": "./dist/solid/index.d.ts",
+        "default": "./dist/solid/index.js"
+      }
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "LICENSE", "README.md"],
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "vue": ">=3.4",
+    "solid-js": ">=1.8"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "vue": { "optional": true },
+    "solid-js": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.10",
+    "react": "^19.0.0",
+    "solid-js": "^1.9.5",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.2",
+    "vue": "^3.5.13"
+  }
+}

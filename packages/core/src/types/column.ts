@@ -47,6 +47,7 @@ export interface EditableCallbackParams<TData = unknown> {
 
 import type { RowNode } from "./row.js";
 import type { CellRendererFn } from "./cell-renderer.js";
+import type { FilterComponentFactory } from "./filter-component.js";
 
 export type SortComparatorFn<TData = unknown, TValue = unknown> = (
   valueA: TValue,
@@ -77,7 +78,8 @@ export interface ColumnDef<TData = unknown, TValue = unknown> {
   initialSort?: "asc" | "desc" | SortDef;
   comparator?: SortComparatorFn<TData, TValue>;
   filterable?: boolean;
-  filter?: boolean | "text" | "number" | "date";
+  /** Provided types, registry key (string), or inline {@link FilterComponentFactory}. */
+  filter?: boolean | "text" | "number" | "date" | string | FilterComponentFactory<TData>;
   filterParams?: Record<string, unknown>;
   filterValueGetter?: (params: ValueGetterParams<TData>) => unknown;
   floatingFilter?: boolean;
@@ -97,7 +99,15 @@ export interface ColumnDef<TData = unknown, TValue = unknown> {
 
   cellRenderer?: string | CellRendererFn<TData, TValue>;
   cellRendererParams?: Record<string, unknown>;
-  cellEditor?: "text" | "number" | "select" | "date" | "largeText" | string | unknown;
+  cellEditor?:
+    | "text"
+    | "number"
+    | "select"
+    | "date"
+    | "largeText"
+    | string
+    | import("./cell-editor.js").CellEditorFactory<TData>
+    | unknown;
   cellEditorParams?: Record<string, unknown>;
   headerRenderer?: string | unknown;
 

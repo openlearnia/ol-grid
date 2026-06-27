@@ -18,6 +18,7 @@ import {
   type CSSProperties,
 } from "react";
 import { useCellRendererPortals } from "./cell-renderer-portals.js";
+import { useCellEditorPortals } from "./cell-editor-portals.js";
 
 let sortModuleRegistered = false;
 let filterModuleRegistered = false;
@@ -104,6 +105,7 @@ function createEngine<TData>(options: GridOptions<TData>): GridEngine<TData> {
     ...options,
     // Signals dom-renderer to reserve React portal hosts per visible cell.
     frameworkCellRenderers: true,
+    frameworkCellEditors: true,
     modules: [...(options.modules ?? []), SortModule, FilterModule, PaginationModule],
   });
 }
@@ -183,6 +185,7 @@ export const OlGrid = forwardRef(function OlGrid<TData>(
 
   const engine = engineRef.current;
   const cellPortals = useCellRendererPortals(engine, rendererRef.current);
+  const editorPortals = useCellEditorPortals(engine, rendererRef.current);
 
   useImperativeHandle(ref, () => ({
     api: engine.getApi(),
@@ -237,6 +240,7 @@ export const OlGrid = forwardRef(function OlGrid<TData>(
         style={style}
       />
       {cellPortals.map((entry) => entry.portal)}
+      {editorPortals.map((entry) => entry.portal)}
     </>
   );
 }) as <TData>(

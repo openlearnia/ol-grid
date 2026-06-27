@@ -74,6 +74,14 @@ export interface ColumnResizedEvent {
   finished: boolean;
 }
 
+export interface ColumnMovedEvent {
+  colId: string;
+  toIndex: number;
+  api: GridApi;
+  finished: boolean;
+  source?: string;
+}
+
 export interface GridEvents<TData = unknown> {
   onGridReady?: (event: GridReadyEvent<TData>) => void;
   onCellClicked?: (event: CellClickedEvent<TData>) => void;
@@ -85,6 +93,7 @@ export interface GridEvents<TData = unknown> {
   onDisplayedColumnsChanged?: (event: DisplayedColumnsChangedEvent) => void;
   onPaginationChanged?: (event: PaginationChangedEvent) => void;
   onColumnResized?: (event: ColumnResizedEvent) => void;
+  onColumnMoved?: (event: ColumnMovedEvent) => void;
   onRowDataUpdated?: (event: RowDataUpdatedEvent<TData>) => void;
   /** Controlled mode: fires when sort model changes from UI or API. */
   onSortModelChange?: (sortModel: SortModel) => void;

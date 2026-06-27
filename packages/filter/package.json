@@ -21,7 +21,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ol-grid/core": "workspace:*"
+    "@ol-grid/core": "workspace:*",
+    "@ol-grid/tempo": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.4.0",

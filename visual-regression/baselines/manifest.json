@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "target": "@ol-grid/example-react",
+  "viewport": { "width": 1280, "height": 720 },
+  "scenarios": [
+    {
+      "name": "react-grid-light",
+      "dataset": "employees-tiny",
+      "theme": "light",
+      "selector": "[data-testid=\"ol-grid\"]"
+    },
+    {
+      "name": "react-grid-dark",
+      "dataset": "employees-tiny",
+      "theme": "dark",
+      "selector": "[data-testid=\"ol-grid\"]"
+    },
+    {
+      "name": "react-grouped-headers",
+      "dataset": "employees-tiny",
+      "theme": "light",
+      "clip": "header",
+      "selector": "[data-testid=\"ol-grid-header-group-organization\"]"
+    }
+  ]
+}

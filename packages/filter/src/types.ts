@@ -42,7 +42,16 @@ export interface DateFilterModel {
   dateTo?: string | null;
 }
 
-export type ColumnFilterModel = TextFilterModel | NumberFilterModel | DateFilterModel;
+export type ColumnFilterModel =
+  | TextFilterModel
+  | NumberFilterModel
+  | DateFilterModel
+  | CustomFilterModel;
+
+export interface CustomFilterModel {
+  filterType: "custom";
+  [key: string]: unknown;
+}
 
 export type FilterModel = Record<string, ColumnFilterModel>;
 

@@ -24,6 +24,27 @@ export type {
 } from "./types/column.js";
 export type { CellRendererParams, CellRendererFn } from "./types/cell-renderer.js";
 export type {
+  CellEditor,
+  CellEditorParams,
+  CellEditorFactory,
+  CellEditorRegistration,
+  ProvidedCellEditorType,
+} from "./types/cell-editor.js";
+export {
+  isProvidedCellEditorType,
+  isFrameworkCellEditor,
+  isRegisteredCellEditorKey,
+  PROVIDED_CELL_EDITOR_TYPES,
+} from "./types/cell-editor.js";
+export type {
+  CustomFilterModel,
+  DoesFilterPassParams,
+  FilterComponent,
+  FilterComponentFactory,
+  FilterDisplayParams,
+  CustomFilterRegistration,
+} from "./types/filter-component.js";
+export type {
   GridReadyEvent,
   CellClickedEvent,
   SelectionChangedEvent,
@@ -34,6 +55,7 @@ export type {
   DisplayedColumnsChangedEvent,
   CellValueChangedEvent,
   ColumnResizedEvent,
+  ColumnMovedEvent,
   RowDataUpdatedEvent,
   GridEvents,
 } from "./types/events.js";
@@ -120,6 +142,9 @@ export type {
   ScrollOverscanState,
   DirectionalOverscanResult,
 } from "./virtualizer/compute-row-range.js";
+export { computeColumnMove, getColumnPinRegion } from "./column/move-column.js";
+export { isColumnMovable } from "./column/is-column-movable.js";
+export { reorderColumnDefsByLeafOrder } from "./column/reorder-column-defs.js";
 
 /** Primary entry point — alias for createGridEngine. */
 export function createGrid<TData>(options: Parameters<typeof createGridEngine<TData>>[0] = {}) {

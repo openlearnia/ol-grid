@@ -7,7 +7,13 @@ import {
   isColumnFilterActive,
 } from "./apply-column-filters.js";
 import type { ColumnFilterModel, FilterModel } from "./types.js";
-import { columnHasFilter, resolveFilterType, resolveFloatingFilter } from "./resolve-filter-type.js";
+import {
+  columnHasFilter,
+  resolveColumnFilterKind,
+  resolveFilterType,
+  resolveFloatingFilter,
+} from "./resolve-filter-type.js";
+import { createEmptyCustomFilterModel } from "./custom-filter.js";
 
 export const FILTER_MODULE_NAME = "FilterModule";
 
@@ -18,7 +24,14 @@ function createColumnFilterStage(): import("@ol-grid/core").RowModelStage {
     order: 100,
     run(rows, ctx) {
       const filterModel = (ctx.filterModel ?? {}) as FilterModel;
-      return applyColumnFilters(rows, ctx.columnDefs, filterModel, ctx.api, ctx.context);
+      return applyColumnFilters(
+        rows,
+        ctx.columnDefs,
+        filterModel,
+        ctx.api,
+        ctx.context,
+        ctx.customFilterRegistry,
+      );
     },
   };
 }
@@ -82,18 +95,23 @@ export function createFilterController(ctx: GridContext) {
     ctx.getStore().dispatch({ type: "SET_OPEN_FILTER", openFilterColId: null });
   }
 
-  function getFilterTypeForColumn(colId: string): "text" | "number" | "date" | null {
+  function getFilterTypeForColumn(colId: string): "text" | "number" | "date" | "custom" | null {
     const columnDefs = engine.getOptions().columnDefs ?? [];
     const defaultColDef = engine.getOptions().defaultColDef;
     const index = columnDefs.findIndex((def, i) => resolveColId(def, i) === colId);
     if (index < 0) return null;
     const merged = defaultColDef ? { ...defaultColDef, ...columnDefs[index]! } : columnDefs[index]!;
-    return resolveFilterType(merged);
+    return resolveColumnFilterKind(merged);
   }
 
   function getDefaultModelForColumn(colId: string): ColumnFilterModel | null {
     const filterType = getFilterTypeForColumn(colId);
     if (!filterType) return null;
+    if (filterType === "custom") {
+      const existing = getFilterModel()[colId];
+      if (existing && existing.filterType === "custom") return existing;
+      return createEmptyCustomFilterModel();
+    }
     const existing = getFilterModel()[colId];
     if (existing) return existing;
     const columnDefs = engine.getOptions().columnDefs ?? [];
@@ -166,7 +184,14 @@ export {
   isColumnFilterActive,
   isFilterModelActive,
 } from "./apply-column-filters.js";
-export { resolveFilterType, columnHasFilter, resolveFloatingFilter } from "./resolve-filter-type.js";
+export { resolveFilterType, resolveColumnFilterKind, columnHasFilter, resolveFloatingFilter, resolveCustomFilterKey } from "./resolve-filter-type.js";
+export {
+  resolveCustomFilterSource,
+  isCustomFilterModel,
+  isCustomFilterModelActive,
+  createEmptyCustomFilterModel,
+  doesCustomFilterPass,
+} from "./custom-filter.js";
 export { getFilterValue } from "./get-filter-value.js";
 export { doesTextFilterPass, TEXT_FILTER_OPTIONS, TEXT_FILTER_LABELS } from "./text-filter.js";
 export { doesNumberFilterPass, NUMBER_FILTER_OPTIONS, NUMBER_FILTER_LABELS } from "./number-filter.js";

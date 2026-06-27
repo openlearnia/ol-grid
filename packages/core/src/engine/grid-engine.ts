@@ -1,5 +1,7 @@
 import { computeAutoColumnWidth } from "../column/auto-size-column.js";
 import { mergeColumnState } from "../column/apply-column-state.js";
+import { computeColumnMove, getColumnPinRegion } from "../column/move-column.js";
+import { reorderColumnDefsByLeafOrder } from "../column/reorder-column-defs.js";
 import { buildHeaderRows } from "../column/build-header-rows.js";
 import { ColumnModel } from "../column/column-model.js";
 import { extractInitialSortModelFromColumnDefs } from "../column/initial-sort.js";
@@ -149,7 +151,7 @@ interface FilterControllerLike {
   ): void;
   openFilter(colId: string): void;
   closeFilter(): void;
-  getFilterTypeForColumn(colId: string): "text" | "number" | "date" | null;
+  getFilterTypeForColumn(colId: string): "text" | "number" | "date" | "custom" | null;
   getDefaultModelForColumn(colId: string): unknown;
   hasFloatingFilters(): boolean;
   isColumnFilterActiveForCol(colId: string): boolean;
@@ -168,13 +170,36 @@ function resolveFilterType<TData>(
   return null;
 }
 
+function resolveColumnFilterKind<TData>(
+  colDef: ColumnDef<TData>,
+): "text" | "number" | "date" | "custom" | null {
+  const provided = resolveFilterType(colDef);
+  if (provided) return provided;
+  const filter = colDef.filter;
+  if (typeof filter === "function") return "custom";
+  if (typeof filter === "string" && filter !== "text" && filter !== "number" && filter !== "date") {
+    return "custom";
+  }
+  return null;
+}
+
+function resolveCustomFilterKey<TData>(colDef: ColumnDef<TData>): string | null {
+  const filter = colDef.filter;
+  if (typeof filter === "string" && filter !== "text" && filter !== "number" && filter !== "date") {
+    return filter;
+  }
+  return null;
+}
+
 function resolveFloatingFilter<TData>(
   colDef: ColumnDef<TData>,
   defaultColDef?: Partial<ColumnDef<TData>>,
 ): boolean {
   if (colDef.floatingFilter === false) return false;
-  if (colDef.floatingFilter === true) return resolveFilterType(colDef) !== null;
-  if (defaultColDef?.floatingFilter === true) return resolveFilterType(colDef) !== null;
+  const kind = resolveColumnFilterKind(colDef);
+  if (kind === "custom") return false;
+  if (colDef.floatingFilter === true) return kind !== null;
+  if (defaultColDef?.floatingFilter === true) return kind !== null;
   return false;
 }
 
@@ -195,6 +220,14 @@ function isFilterModelEntryActive(model: unknown): boolean {
       return !!entry.dateFrom || !!entry.dateTo;
     }
     return !!entry.dateFrom;
+  }
+  if (entry.filterType === "custom") {
+    for (const [key, value] of Object.entries(entry)) {
+      if (key === "filterType") continue;
+      if (Array.isArray(value)) return value.length > 0;
+      if (value != null && value !== "") return true;
+    }
+    return false;
   }
   return false;
 }
@@ -272,6 +305,9 @@ function createGridApi<TData>(
     },
     applyColumnState(params) {
       return engine.applyColumnState(params);
+    },
+    moveColumn(colKey, toIndex) {
+      engine.moveColumn(colKey, toIndex);
     },
     setQuickFilterText(text) {
       engine.setQuickFilterText(text);
@@ -384,7 +420,7 @@ function toRenderColumn<TData>(
   defaultColDef?: Partial<ColumnDef<TData>>,
 ): RenderFrame["columns"][number] {
   const merged = defaultColDef ? { ...defaultColDef, ...column.def } : column.def;
-  const filterType = resolveFilterType(merged);
+  const filterKind = resolveColumnFilterKind(merged);
   return {
     colId: column.colId,
     headerName: column.isSelectionColumn ? "" : (column.def.headerName ?? column.colId),
@@ -395,8 +431,9 @@ function toRenderColumn<TData>(
     sortable: column.isSelectionColumn ? false : column.def.sortable !== false,
     pinned: column.pinned,
     isSelectionColumn: column.isSelectionColumn,
-    filterType,
-    filterActive: filterType ? isFilterModelEntryActive(filterModel[column.colId]) : false,
+    filterType: filterKind,
+    customFilterKey: resolveCustomFilterKey(merged),
+    filterActive: filterKind ? isFilterModelEntryActive(filterModel[column.colId]) : false,
     floatingFilter: resolveFloatingFilter(merged, defaultColDef),
     filterParams: merged.filterParams,
   };
@@ -424,6 +461,14 @@ export class GridEngine<TData = unknown> {
   private infiniteRowModel: InfiniteRowModelLike<TData> | null = null;
   private infiniteController: InfiniteRowModelControllerLike | null = null;
   private cellRendererRegistry = new Map<string, CellRendererFn<TData>>();
+  private customFilterRegistry = new Map<
+    string,
+    import("../types/filter-component.js").CustomFilterRegistration<TData>
+  >();
+  private cellEditorRegistry = new Map<
+    string,
+    import("../types/cell-editor.js").CellEditorRegistration<TData>
+  >();
   private frameworkCellRenderers = new Set<string | CellRendererFn<TData>>();
   private lastBodyFocusedCell: CellPosition | null = null;
   private scrollOverscanState: ScrollOverscanState = {
@@ -593,6 +638,84 @@ export class GridEngine<TData = unknown> {
     this.cellRendererRegistry.set(name, renderer);
   }
 
+  registerFilterComponent(
+    name: string,
+    registration: import("../types/filter-component.js").CustomFilterRegistration<TData>,
+  ): void {
+    this.customFilterRegistry.set(name, registration);
+  }
+
+  registerCellEditor(
+    name: string,
+    registration: import("../types/cell-editor.js").CellEditorRegistration<TData>,
+  ): void {
+    this.cellEditorRegistry.set(name, registration);
+  }
+
+  getCellEditorRegistration(
+    name: string,
+  ): import("../types/cell-editor.js").CellEditorRegistration<TData> | undefined {
+    return this.cellEditorRegistry.get(name);
+  }
+
+  getCellEditorRegistry(): ReadonlyMap<
+    string,
+    import("../types/cell-editor.js").CellEditorRegistration<TData>
+  > {
+    return this.cellEditorRegistry;
+  }
+
+  resolveCellEditorFactory(
+    colDef: ColumnDef<TData>,
+  ): import("../types/cell-editor.js").CellEditorFactory<TData> | undefined {
+    const editor = colDef.cellEditor;
+    if (typeof editor === "function") {
+      return editor as import("../types/cell-editor.js").CellEditorFactory<TData>;
+    }
+    if (typeof editor === "string" && !this.isProvidedCellEditorType(editor)) {
+      return this.cellEditorRegistry.get(editor)?.create;
+    }
+    return undefined;
+  }
+
+  private isProvidedCellEditorType(
+    value: string,
+  ): value is import("../types/cell-editor.js").ProvidedCellEditorType {
+    return (
+      value === "text" ||
+      value === "number" ||
+      value === "select" ||
+      value === "date" ||
+      value === "largeText"
+    );
+  }
+
+  getFilterComponentRegistration(
+    name: string,
+  ): import("../types/filter-component.js").CustomFilterRegistration<TData> | undefined {
+    return this.customFilterRegistry.get(name);
+  }
+
+  getCustomFilterRegistry(): ReadonlyMap<
+    string,
+    import("../types/filter-component.js").CustomFilterRegistration<TData>
+  > {
+    return this.customFilterRegistry;
+  }
+
+  resolveCustomFilterFactory(
+    colDef: ColumnDef<TData>,
+  ): import("../types/filter-component.js").FilterComponentFactory<TData> | undefined {
+    const filter = colDef.filter;
+    if (typeof filter === "function") {
+      return filter as import("../types/filter-component.js").FilterComponentFactory<TData>;
+    }
+    if (typeof filter === "string" && filter !== "text" && filter !== "number" && filter !== "date") {
+      return this.customFilterRegistry.get(filter)?.create;
+    }
+    return undefined;
+  }
+
   getFrameworkCellRenderers(): ReadonlySet<string | CellRendererFn<TData>> {
     return this.frameworkCellRenderers;
   }
@@ -688,6 +811,9 @@ export class GridEngine<TData = unknown> {
 
     this.rowModel.setFilterModel(filterModel);
     this.rowModel.setPaginationContext(this.paginationController?.getStageContext());
+    this.rowModel.setStageContextExtras({
+      customFilterRegistry: this.customFilterRegistry,
+    });
     this.rowModel.rebuild(
       sortModel,
       filterModel,
@@ -999,8 +1125,21 @@ export class GridEngine<TData = unknown> {
     }
   }
 
-  getColumnFilterType(colId: string): "text" | "number" | "date" | null {
-    return this.filterController?.getFilterTypeForColumn(colId) ?? null;
+  getColumnFilterType(colId: string): "text" | "number" | "date" | "custom" | null {
+    if (this.filterController) {
+      return this.filterController.getFilterTypeForColumn(colId);
+    }
+    const colDef = this.getMergedColumnDef(colId);
+    return colDef ? resolveColumnFilterKind(colDef) : null;
+  }
+
+  private getMergedColumnDef(colId: string): ColumnDef<TData> | undefined {
+    const columnDefs = this.getMergedColumnDefs();
+    const defaultColDef = this.options.defaultColDef;
+    const index = columnDefs.findIndex((def, i) => resolveColId(def, i) === colId);
+    if (index < 0) return undefined;
+    const def = columnDefs[index]!;
+    return defaultColDef ? { ...defaultColDef, ...def } : def;
   }
 
   getDefaultColumnFilterModel(colId: string): unknown {
@@ -1259,7 +1398,10 @@ export class GridEngine<TData = unknown> {
 
     if (params.applyOrder && params.state?.length) {
       const orderedIds = params.state.map((col) => col.colId);
-      const mergedColumnDefs = this.reorderColumnDefs(this.getMergedColumnDefs(), orderedIds);
+      const mergedColumnDefs = reorderColumnDefsByLeafOrder(
+        this.getMergedColumnDefs(),
+        orderedIds,
+      );
       this.options.columnDefs = mergedColumnDefs;
       this.columnModel.setColumnDefs(mergedColumnDefs);
     }
@@ -1276,16 +1418,112 @@ export class GridEngine<TData = unknown> {
     return success;
   }
 
-  private reorderColumnDefs(
-    columnDefs: ColumnDef<TData>[],
-    orderedIds: string[],
-  ): ColumnDef<TData>[] {
-    const byId = new Map(columnDefs.map((def, index) => [resolveColId(def, index), def]));
-    const ordered = orderedIds
-      .map((colId) => byId.get(colId))
-      .filter((def): def is ColumnDef<TData> => def !== undefined);
-    const remaining = columnDefs.filter((def, index) => !orderedIds.includes(resolveColId(def, index)));
-    return [...ordered, ...remaining];
+  moveColumn(
+    colId: string,
+    toIndex: number,
+    source: "api" | "uiColumnMoved" = "api",
+    event: { finished?: boolean } = { finished: true },
+  ): boolean {
+    if (this.options.suppressColumnMove) return false;
+
+    const columns = this.columnModel.getColumns();
+    const mergedColumnDefsForMove = this.getMergedColumnDefs();
+    const flattenOrder = flattenColumnDefs(mergedColumnDefsForMove).map((entry) => entry.colId);
+    const move = computeColumnMove(
+      columns.map((column) => ({
+        colId: column.colId,
+        pinned: column.pinned,
+        def: column.def,
+        isSelectionColumn: column.isSelectionColumn,
+      })),
+      colId,
+      toIndex,
+      { suppressColumnMove: this.options.suppressColumnMove },
+      flattenOrder,
+    );
+    if (!move) return false;
+
+    const prevOrder = columns.filter((column) => !column.isSelectionColumn).map((column) => column.colId);
+    const movedColumn = columns.find((column) => column.colId === colId);
+    const movedRegion = movedColumn
+      ? getColumnPinRegion(movedColumn.pinned)
+      : "center";
+    const columnById = new Map(
+      columns
+        .filter((column) => !column.isSelectionColumn)
+        .map((column) => [column.colId, column] as const),
+    );
+    const regionOrderedColIds = move.orderedColIds.filter((id) => {
+      const entry = columnById.get(id);
+      return entry && getColumnPinRegion(entry.pinned) === movedRegion;
+    });
+    const mergedColumnDefs = reorderColumnDefsByLeafOrder(
+      this.getMergedColumnDefs(),
+      move.orderedColIds,
+      colId,
+      move.toIndex,
+      regionOrderedColIds,
+      move.fromIndex,
+    );
+    const expectedRegionOrder = move.orderedColIds.filter((id) => {
+      const entry = columnById.get(id);
+      return entry && getColumnPinRegion(entry.pinned) === movedRegion;
+    });
+    const nextRegionOrder = flattenColumnDefs(mergedColumnDefs)
+      .map((entry) => entry.colId)
+      .filter((id) => {
+        const entry = columnById.get(id);
+        return entry && getColumnPinRegion(entry.pinned) === movedRegion;
+      });
+    if (nextRegionOrder.join("\0") !== expectedRegionOrder.join("\0")) {
+      return false;
+    }
+
+    this.options.columnDefs = mergedColumnDefs;
+    this.columnModel.setColumnDefs(mergedColumnDefs);
+
+    const currentState = this.store.getState().columns;
+    const { columns: nextState } = mergeColumnState(currentState, {
+      applyOrder: true,
+      state: move.orderedColIds.map((id) => ({ colId: id })),
+    });
+
+    this.columnModel.setColumnState(nextState);
+    this.rebuildRowModel(nextState);
+    this.store.dispatch({ type: "SET_COLUMNS", columns: nextState });
+
+    this.options.onColumnMoved?.({
+      colId,
+      toIndex: move.toIndex,
+      finished: event.finished !== false,
+      api: this.api,
+      source,
+    });
+
+    const nextOrder = this.columnModel
+      .getColumns()
+      .filter((column) => !column.isSelectionColumn)
+      .map((column) => column.colId);
+    if (prevOrder.join("\0") !== nextOrder.join("\0")) {
+      this.emitGridEvent("displayedColumnsChanged", { api: this.api, source });
+    }
+
+    return true;
+  }
+
+  /** Emits {@link GridEvents.onColumnMoved} with `finished: true` after a UI drag ends. */
+  finalizeColumnMove(
+    colId: string,
+    toIndex: number,
+    source: "api" | "uiColumnMoved" = "uiColumnMoved",
+  ): void {
+    this.options.onColumnMoved?.({
+      colId,
+      toIndex,
+      finished: true,
+      api: this.api,
+      source,
+    });
   }
 
   startEditingCell(rowIndex: number, colId: string): boolean {
@@ -2035,6 +2273,18 @@ export class GridEngine<TData = unknown> {
       const useFrameworkRenderer =
         this.options.frameworkCellRenderers === true && typeof renderer === "function";
 
+      const editor = colDef.cellEditor;
+      const useFrameworkEditor =
+        isEditing &&
+        this.options.frameworkCellEditors === true &&
+        typeof editor === "function";
+      const cellEditorKey =
+        isEditing &&
+        typeof editor === "string" &&
+        !this.isProvidedCellEditorType(editor)
+          ? editor
+          : undefined;
+
       return {
         colId: column.colId,
         value: isEditing
@@ -2047,6 +2297,10 @@ export class GridEngine<TData = unknown> {
           ? undefined
           : (renderer as RenderFrame["rows"][number]["cells"][number]["cellRenderer"]),
         cellRendererParams: colDef.cellRendererParams,
+        useFrameworkEditor,
+        frameworkEditor: useFrameworkEditor ? editor : undefined,
+        cellEditorKey,
+        cellEditorParams: colDef.cellEditorParams,
       } satisfies RenderFrame["rows"][number]["cells"][number];
     });
 

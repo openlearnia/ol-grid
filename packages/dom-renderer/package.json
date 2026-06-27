@@ -25,7 +25,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ol-grid/core": "workspace:*"
+    "@ol-grid/core": "workspace:*",
+    "@ol-grid/drag-and-drop": "workspace:*"
   },
   "devDependencies": {
     "happy-dom": "^20.10.6",

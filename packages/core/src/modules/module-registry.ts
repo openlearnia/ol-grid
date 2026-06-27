@@ -15,6 +15,10 @@ export interface RowModelStageContext {
   context: unknown;
   sortModel: Array<{ colId: string; sort: "asc" | "desc" }>;
   filterModel: Record<string, unknown>;
+  customFilterRegistry?: ReadonlyMap<
+    string,
+    import("../types/filter-component.js").CustomFilterRegistration
+  >;
   pagination?: {
     enabled: boolean;
     page: number;

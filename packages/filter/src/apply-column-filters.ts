@@ -1,7 +1,12 @@
-import type { ColumnDef } from "@ol-grid/core";
+import type { ColumnDef, CustomFilterRegistration } from "@ol-grid/core";
 import type { RowNode } from "@ol-grid/core";
 import { resolveColId } from "@ol-grid/core";
-import type { ColumnFilterModel, FilterModel } from "./types.js";
+import type { ColumnFilterModel, CustomFilterModel, FilterModel } from "./types.js";
+import {
+  doesCustomFilterPass,
+  isCustomFilterModelActive,
+  resolveCustomFilterSource,
+} from "./custom-filter.js";
 import { doesDateFilterPass, DATE_FILTER_OPTIONS } from "./date-filter.js";
 import { getFilterValue } from "./get-filter-value.js";
 import { doesNumberFilterPass, NUMBER_FILTER_OPTIONS } from "./number-filter.js";
@@ -24,6 +29,8 @@ export function isColumnFilterActive(model: ColumnFilterModel | undefined): bool
         return !!model.dateFrom || !!model.dateTo;
       }
       return !!model.dateFrom;
+    case "custom":
+      return isCustomFilterModelActive(model as CustomFilterModel);
     default:
       return false;
   }
@@ -34,6 +41,7 @@ export function isFilterModelActive(model: FilterModel): boolean {
 }
 
 interface PreparedColumnFilter<TData> {
+  colId: string;
   def: ColumnDef<TData>;
   model: ColumnFilterModel;
   normalizedTextNeedle?: string;
@@ -43,15 +51,15 @@ function prepareActiveFilters<TData>(
   filterModel: FilterModel,
   filterableColumns: Array<{ def: ColumnDef<TData>; colId: string }>,
 ): PreparedColumnFilter<TData>[] {
-  const columnById = new Map(filterableColumns.map((entry) => [entry.colId, entry.def]));
+  const columnById = new Map(filterableColumns.map((entry) => [entry.colId, entry]));
   const prepared: PreparedColumnFilter<TData>[] = [];
 
   for (const [colId, model] of Object.entries(filterModel)) {
     if (!isColumnFilterActive(model)) continue;
-    const def = columnById.get(colId);
-    if (!def) continue;
+    const column = columnById.get(colId);
+    if (!column) continue;
 
-    const entry: PreparedColumnFilter<TData> = { def, model };
+    const entry: PreparedColumnFilter<TData> = { colId, def: column.def, model };
     if (model.filterType === "text") {
       // Normalize once per filter — rows are scanned in a tight inner loop.
       entry.normalizedTextNeedle = normalizeFilterText(model.filter);
@@ -67,7 +75,23 @@ function doesPreparedFilterPass<TData>(
   prepared: PreparedColumnFilter<TData>,
   api: unknown,
   context: unknown,
+  customFilterRegistry?: ReadonlyMap<string, CustomFilterRegistration<TData>>,
 ): boolean {
+  if (prepared.model.filterType === "custom") {
+    const source = resolveCustomFilterSource(prepared.def);
+    if (!source) return true;
+    return doesCustomFilterPass(
+      node,
+      prepared.model as CustomFilterModel,
+      source,
+      customFilterRegistry,
+      prepared.def,
+      prepared.colId,
+      api,
+      context,
+    );
+  }
+
   const value = getFilterValue(node, prepared.def, api, context);
 
   switch (prepared.model.filterType) {
@@ -88,6 +112,7 @@ export function applyColumnFilters<TData>(
   filterModel: FilterModel,
   api: unknown,
   context: unknown,
+  customFilterRegistry?: ReadonlyMap<string, CustomFilterRegistration<TData>>,
 ): RowNode<TData>[] {
   const activeFilters = prepareActiveFilters(
     filterModel,
@@ -106,7 +131,15 @@ export function applyColumnFilters<TData>(
     const node = rows[rowIndex]!;
     let passes = true;
     for (let filterIndex = 0; filterIndex < activeFilters.length; filterIndex++) {
-      if (!doesPreparedFilterPass(node, activeFilters[filterIndex]!, api, context)) {
+      if (
+        !doesPreparedFilterPass(
+          node,
+          activeFilters[filterIndex]!,
+          api,
+          context,
+          customFilterRegistry,
+        )
+      ) {
         passes = false;
         break;
       }
@@ -119,10 +152,12 @@ export function applyColumnFilters<TData>(
 }
 
 export function createEmptyFilterModelForType(
-  filterType: "text" | "number" | "date",
+  filterType: "text" | "number" | "date" | "custom",
   defaultOption?: string,
 ): ColumnFilterModel {
   switch (filterType) {
+    case "custom":
+      return { filterType: "custom" };
     case "number": {
       const type =
         defaultOption && (NUMBER_FILTER_OPTIONS as readonly string[]).includes(defaultOption)

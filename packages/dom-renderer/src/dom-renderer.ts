@@ -13,10 +13,14 @@ import themeCss from "./theme.css";
 import { renderCellContent } from "./cell-renderer.js";
 import {
   createCellEditorElement,
+  mountCustomCellEditor,
+  readCustomCellEditorValue,
   readEditorValue,
   resolveCellEditorType,
+  usesCustomCellEditor,
+  type CustomCellEditorMount,
   type ProvidedCellEditorType,
-} from "./cell-editors.js";
+} from "./custom-cell-editor.js";
 import { RowPool, reconcileRowOrder } from "./row-pool.js";
 import { shouldSyncScrollBeforePaint } from "./scroll-render.js";
 import {
@@ -26,8 +30,13 @@ import {
   syncFloatingFilterInputValue,
   type FilterModelEntry,
 } from "./filter-ui.js";
+import { mountCustomFilterPopup } from "./custom-filter-host.js";
 import { createSortAscIcon, createSortDescIcon } from "./icons.js";
 import { createPaginationPanel } from "./pagination-panel.js";
+import {
+  createColumnHeaderDnDController,
+  type ColumnHeaderDnDController,
+} from "./column-header-dnd.js";
 import {
   bodyCellTestId,
   bodyViewportTestId,
@@ -162,7 +171,8 @@ export class DomRenderer implements RendererAdapter {
   private resizeObserver: ResizeObserver | null = null;
   private frame: RenderFrame | null = null;
   private activeEditor: HTMLElement | null = null;
-  private activeEditorType: ProvidedCellEditorType | null = null;
+  private activeEditorType: ProvidedCellEditorType | "custom" | "framework" | null = null;
+  private activeCustomEditor: CustomCellEditorMount | null = null;
   private suppressEditorBlur = false;
   private keyboardNavFocusPending = false;
   private resizeState: {
@@ -170,6 +180,9 @@ export class DomRenderer implements RendererAdapter {
     startX: number;
     startWidth: number;
   } | null = null;
+  private columnHeaderDnD: ColumnHeaderDnDController | null = null;
+  private columnMoveIndicator: HTMLElement | null = null;
+  private suppressHeaderClick = false;
   private scrollLoopRafId: number | null = null;
   private scrollWatcherActive = false;
   /** Last body scrollTop observed — detects native scrollbar drag before store catches up. */
@@ -395,12 +408,26 @@ export class DomRenderer implements RendererAdapter {
     this.resizeObserver = new ResizeObserver(() => this.reportViewportSize());
     this.resizeObserver.observe(body);
 
+    this.columnHeaderDnD = createColumnHeaderDnDController(engine, {
+      onDragFinished: () => {
+        this.hideColumnMoveIndicator();
+        document.body.style.cursor = "";
+        this.suppressHeaderClick = true;
+        queueMicrotask(() => {
+          this.suppressHeaderClick = false;
+        });
+      },
+    });
+
     this.reportViewportSize();
     this.startScrollWatcher();
   }
 
   unmount(): void {
     this.cleanupResizeListeners();
+    this.columnHeaderDnD?.destroy();
+    this.columnHeaderDnD = null;
+    this.hideColumnMoveIndicator();
     this.removeActiveEditor();
     this.body?.removeEventListener("scroll", this.handleScroll);
     this.body?.removeEventListener("wheel", this.handleBodyWheel);
@@ -548,6 +575,14 @@ export class DomRenderer implements RendererAdapter {
     this.renderHeaderRows(this.headerPinnedLeft!, frame.pinnedLeftHeaderRows, frame, frame.pinnedLeftColumns);
     this.renderHeaderRows(this.headerCenterScroll!, frame.centerHeaderRows, frame, frame.centerColumns, true);
     this.renderHeaderRows(this.headerPinnedRight!, frame.pinnedRightHeaderRows, frame, frame.pinnedRightColumns);
+    if (!this.columnHeaderDnD?.isDragActive()) {
+      this.columnHeaderDnD?.refresh({
+        headerPinnedLeft: this.headerPinnedLeft!,
+        headerCenterScroll: this.headerCenterScroll!,
+        headerPinnedRight: this.headerPinnedRight!,
+        headerRowCount: frame.headerRowCount,
+      });
+    }
     if (frame.showFloatingFilters) {
       this.renderFloatingFilterSection(this.floatingPinnedLeft, frame.pinnedLeftColumns, frame);
       this.renderFloatingFilterSection(this.floatingCenterRow, frame.centerColumns, frame);
@@ -978,6 +1013,33 @@ export class DomRenderer implements RendererAdapter {
     const model =
       frame.filterModel[openColId] ?? this.engine.getDefaultColumnFilterModel(openColId);
 
+    if (filterType === "custom") {
+      const colDef = this.engine.getColumnModel().getByColId(openColId)?.def;
+      const factory = colDef ? this.engine.resolveCustomFilterFactory(colDef) : undefined;
+      if (!factory) {
+        this.engine.closeColumnFilter();
+        return;
+      }
+
+      this.filterPopupCleanup = mountCustomFilterPopup({
+        colId: openColId,
+        headerName: column.headerName,
+        model,
+        anchor,
+        host: this.host,
+        filterParams: column.filterParams,
+        createComponent: factory,
+        onApply: (nextModel) => {
+          this.engine?.applyColumnFilterFromUi(openColId, nextModel, "ui");
+        },
+        onClose: () => {
+          this.engine?.closeColumnFilter();
+          this.closeFilterPopup();
+        },
+      });
+      return;
+    }
+
     this.filterPopupCleanup = mountFilterPopup({
       colId: openColId,
       headerName: column.headerName,
@@ -1001,25 +1063,25 @@ export class DomRenderer implements RendererAdapter {
     const handle = (mouseEvent.target as HTMLElement | null)?.closest<HTMLElement>(
       "[data-resize-handle]",
     );
-    if (!handle || !this.engine) return;
+    if (handle && this.engine) {
+      const colId = handle.closest<HTMLElement>("[data-col-id]")?.dataset.colId;
+      if (!colId) return;
 
-    const colId = handle.closest<HTMLElement>("[data-col-id]")?.dataset.colId;
-    if (!colId) return;
+      event.preventDefault();
+      event.stopPropagation();
 
-    event.preventDefault();
-    event.stopPropagation();
+      const column = this.frame?.columns.find((col) => col.colId === colId);
+      if (!column) return;
 
-    const column = this.frame?.columns.find((col) => col.colId === colId);
-    if (!column) return;
+      this.resizeState = {
+        colId,
+        startX: mouseEvent.clientX,
+        startWidth: column.width,
+      };
 
-    this.resizeState = {
-      colId,
-      startX: mouseEvent.clientX,
-      startWidth: column.width,
-    };
-
-    document.addEventListener("mousemove", this.handleResizeMouseMove);
-    document.addEventListener("mouseup", this.handleResizeMouseUp);
+      document.addEventListener("mousemove", this.handleResizeMouseMove);
+      document.addEventListener("mouseup", this.handleResizeMouseUp);
+    }
   };
 
   private readonly handleHeaderDblClick = (event: Event): void => {
@@ -1060,8 +1122,24 @@ export class DomRenderer implements RendererAdapter {
     this.resizeState = null;
   }
 
+  private showColumnMoveIndicator(): void {
+    if (!this.host || this.columnMoveIndicator) return;
+    const indicator = document.createElement("div");
+    indicator.className = "ol-grid__column-move-indicator";
+    indicator.setAttribute("aria-hidden", "true");
+    this.host.appendChild(indicator);
+    this.columnMoveIndicator = indicator;
+    document.body.style.cursor = "grabbing";
+  }
+
+  private hideColumnMoveIndicator(): void {
+    this.columnMoveIndicator?.remove();
+    this.columnMoveIndicator = null;
+  }
+
   private readonly handleHeaderClick = (event: Event): void => {
     const mouseEvent = event as MouseEvent;
+    if (this.suppressHeaderClick) return;
     if ((mouseEvent.target as HTMLElement | null)?.closest("[data-resize-handle]")) return;
 
     const filterButton = (mouseEvent.target as HTMLElement | null)?.closest<HTMLElement>(
@@ -1225,6 +1303,7 @@ export class DomRenderer implements RendererAdapter {
 
   private readonly handleEditorBlur = (): void => {
     if (this.suppressEditorBlur || !this.engine) return;
+    this.flushActiveEditorValue();
     const cancel = !this.engine.shouldStopEditingWhenCellsLoseFocus();
     this.engine.stopEditing(cancel);
   };
@@ -1448,6 +1527,7 @@ export class DomRenderer implements RendererAdapter {
         event.preventDefault();
         event.stopPropagation();
         this.suppressEditorBlur = true;
+        this.flushActiveEditorValue();
         this.engine.stopEditing(false);
         this.focusCurrentStoreCell();
         return;
@@ -1463,6 +1543,7 @@ export class DomRenderer implements RendererAdapter {
         event.preventDefault();
         event.stopPropagation();
         this.suppressEditorBlur = true;
+        this.flushActiveEditorValue();
         this.engine.stopEditingAndMoveToNextEditable(!event.shiftKey);
         if (!this.engine.getStore().getState().editing) {
           this.keyboardNavFocusPending = true;
@@ -1856,6 +1937,8 @@ export class DomRenderer implements RendererAdapter {
   ): void {
     const focusedHeaderColId = frame.focusedHeaderColId;
     const useGrid = frame.headerRowCount > 1;
+    const reuseElements = this.columnHeaderDnD?.isDragActive() ?? false;
+    const existingByKey = reuseElements ? this.collectHeaderCellsByKey(container) : null;
 
     if (useGrid) {
       container.classList.add("ol-grid__header-grid");
@@ -1863,7 +1946,7 @@ export class DomRenderer implements RendererAdapter {
       container.style.gridTemplateColumns = columns.map((column) => `${column.width}px`).join(" ");
       container.style.gridTemplateRows = `repeat(${rows.length}, ${frame.headerHeight}px)`;
 
-      const nextChildren: HTMLElement[] = [];
+      const nextChildren: Array<{ el: HTMLElement; gridColumn: number }> = [];
       for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
         for (const cell of rows[rowIndex]!.cells) {
           const el = this.createHeaderCellElement(
@@ -1872,12 +1955,14 @@ export class DomRenderer implements RendererAdapter {
             focusedHeaderColId,
             rowIndex,
             true,
+            existingByKey?.get(this.headerCellKey(cell) ?? ""),
           );
           this.applyHeaderCellGridPlacement(el, cell);
-          nextChildren.push(el);
+          nextChildren.push({ el, gridColumn: cell.gridColumn ?? 0 });
         }
       }
-      container.replaceChildren(...nextChildren);
+      nextChildren.sort((a, b) => a.gridColumn - b.gridColumn);
+      container.replaceChildren(...nextChildren.map((entry) => entry.el));
       return;
     }
 
@@ -1895,12 +1980,34 @@ export class DomRenderer implements RendererAdapter {
 
       for (const cell of headerRow.cells) {
         nextChildren.push(
-          this.createHeaderCellElement(cell, frame, focusedHeaderColId, rowIndex, false),
+          this.createHeaderCellElement(
+            cell,
+            frame,
+            focusedHeaderColId,
+            rowIndex,
+            false,
+            existingByKey?.get(this.headerCellKey(cell) ?? ""),
+          ),
         );
       }
 
       rowEl.replaceChildren(...nextChildren);
     }
+  }
+
+  private collectHeaderCellsByKey(container: HTMLElement): Map<string, HTMLElement> {
+    const map = new Map<string, HTMLElement>();
+    container.querySelectorAll<HTMLElement>('[role="columnheader"]').forEach((el) => {
+      const key = el.dataset.colId ?? el.dataset.groupId;
+      if (key) map.set(key, el);
+    });
+    return map;
+  }
+
+  private headerCellKey(cell: RenderHeaderCell): string | null {
+    if (cell.kind === "group") return cell.groupId ?? null;
+    if (cell.kind === "selection") return "__selection__";
+    return cell.colId ?? null;
   }
 
   private applyHeaderCellGridPlacement(el: HTMLElement, cell: RenderHeaderCell): void {
@@ -1949,10 +2056,13 @@ export class DomRenderer implements RendererAdapter {
     focusedHeaderColId: string | null,
     rowIndex: number,
     useGridLayout = false,
+    existing?: HTMLElement,
   ): HTMLElement {
-    const el = document.createElement("div");
-    el.className = "ol-grid__header-cell";
-    el.setAttribute("role", "columnheader");
+    const el = existing ?? document.createElement("div");
+    if (!existing) {
+      el.className = "ol-grid__header-cell";
+      el.setAttribute("role", "columnheader");
+    }
     if (!useGridLayout) {
       el.style.width = `${cell.width}px`;
     }
@@ -1990,6 +2100,12 @@ export class DomRenderer implements RendererAdapter {
     if (cell.colId) el.dataset.testid = headerCellTestId(cell.colId);
     el.dataset.sortable = String(cell.sortable ?? false);
     el.classList.toggle("ol-grid__header-cell--sortable", !!cell.sortable);
+    const columnDef = cell.colId
+      ? this.engine?.getColumnModel().getByColId(cell.colId)?.def
+      : undefined;
+    const movable =
+      !!columnDef && !columnDef.suppressMovable && !columnDef.lockPosition;
+    el.classList.toggle("ol-grid__header-cell--movable", movable);
     el.classList.toggle("ol-grid__header-cell--pinned-left", cell.pinned === "left");
     el.classList.toggle("ol-grid__header-cell--pinned-right", cell.pinned === "right");
 
@@ -2420,6 +2536,61 @@ export class DomRenderer implements RendererAdapter {
     const colDef = column?.def;
     if (!colDef) return;
 
+    const editingCell = frame.rows
+      .find((row) => row.rowIndex === editing.activeCell.rowIndex)
+      ?.cells.find((cell) => cell.colId === editing.activeCell.colId);
+
+    if (editingCell?.useFrameworkEditor) {
+      if (this.activeEditorType !== "framework") {
+        this.removeActiveEditor();
+        cellEl.replaceChildren();
+        this.activeEditorType = "framework";
+        this.activeEditor = cellEl;
+      }
+      return;
+    }
+
+    if (usesCustomCellEditor(colDef, this.engine)) {
+      const existingCustom =
+        this.activeCustomEditor &&
+        this.activeEditor === this.activeCustomEditor.element &&
+        this.activeEditorType === "custom";
+
+      if (!existingCustom) {
+        this.removeActiveEditor();
+        const mount = mountCustomCellEditor(
+          this.engine,
+          colDef,
+          editing.activeCell.colId,
+          editing.activeCell.rowIndex,
+          editing.editValue,
+          (value) => {
+            this.engine?.updateEditValue(value);
+          },
+          (cancel) => {
+            this.engine?.stopEditing(cancel);
+          },
+        );
+        if (!mount) return;
+
+        mount.element.addEventListener("blur", () => {
+          this.handleEditorBlur();
+        }, true);
+        cellEl.replaceChildren(mount.element);
+        this.activeEditor = mount.element;
+        this.activeEditorType = "custom";
+        this.activeCustomEditor = mount;
+      }
+
+      if (document.activeElement !== this.activeEditor) {
+        const focusable = this.activeEditor?.querySelector<HTMLElement>(
+          "input, select, textarea, button, [tabindex]:not([tabindex='-1'])",
+        );
+        (focusable ?? this.activeEditor)?.focus();
+      }
+      return;
+    }
+
     const editorType = resolveCellEditorType(colDef);
     const existingEditor = cellEl.querySelector<HTMLElement>(":scope > .ol-grid__cell-editor");
     const editorMatchesCell =
@@ -2454,6 +2625,8 @@ export class DomRenderer implements RendererAdapter {
     if (currentValue !== editing.editValue) {
       if (editor instanceof HTMLInputElement || editor instanceof HTMLSelectElement) {
         editor.value = editing.editValue;
+      } else if (editor instanceof HTMLTextAreaElement) {
+        editor.value = editing.editValue;
       }
     }
 
@@ -2466,8 +2639,17 @@ export class DomRenderer implements RendererAdapter {
   }
 
   private removeActiveEditor(): void {
+    this.activeCustomEditor?.destroy();
+    this.activeCustomEditor = null;
     this.activeEditor = null;
     this.activeEditorType = null;
+  }
+
+  private flushActiveEditorValue(): void {
+    if (!this.engine || !this.activeCustomEditor) return;
+    this.engine.updateEditValue(
+      readCustomCellEditorValue(this.activeCustomEditor.editor),
+    );
   }
 
   private syncHostTabIndex(frame: RenderFrame): void {

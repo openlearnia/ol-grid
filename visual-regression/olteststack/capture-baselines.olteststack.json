@@ -1,0 +1,76 @@
+{
+  "version": "1.0",
+  "name": "ol-grid visual baselines",
+  "goal": "Capture React demo grid screenshots for NFR-Q-03 baseline review",
+  "url": "http://127.0.0.1:4321",
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "http://127.0.0.1:4321"
+    },
+    {
+      "action": "wait",
+      "selector": "[data-testid=\"demo-dataset-select\"]"
+    },
+    {
+      "action": "click",
+      "query": "[data-testid=\"demo-dataset-select\"]"
+    },
+    {
+      "action": "type",
+      "query": "[data-testid=\"demo-dataset-select\"]",
+      "text": "employees-tiny"
+    },
+    {
+      "action": "click",
+      "query": "[data-testid=\"demo-theme-select\"]"
+    },
+    {
+      "action": "type",
+      "query": "[data-testid=\"demo-theme-select\"]",
+      "text": "light"
+    },
+    {
+      "action": "wait",
+      "selector": "[data-testid=\"ol-grid\"]"
+    },
+    {
+      "action": "screenshot",
+      "name": "react-grid-light"
+    },
+    {
+      "action": "click",
+      "query": "[data-testid=\"demo-theme-select\"]"
+    },
+    {
+      "action": "type",
+      "query": "[data-testid=\"demo-theme-select\"]",
+      "text": "dark"
+    },
+    {
+      "action": "wait",
+      "selector": "[data-testid=\"ol-grid\"]"
+    },
+    {
+      "action": "screenshot",
+      "name": "react-grid-dark"
+    },
+    {
+      "action": "click",
+      "query": "[data-testid=\"demo-theme-select\"]"
+    },
+    {
+      "action": "type",
+      "query": "[data-testid=\"demo-theme-select\"]",
+      "text": "light"
+    },
+    {
+      "action": "wait",
+      "selector": "[data-testid=\"ol-grid-header-group-organization\"]"
+    },
+    {
+      "action": "screenshot",
+      "name": "react-grouped-headers"
+    }
+  ]
+}

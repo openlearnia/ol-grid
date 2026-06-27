@@ -3,8 +3,8 @@
 > **Authoritative product spec:** [REQUIREMENTS.md](./REQUIREMENTS.md)  
 > **Architecture:** [ARCHITECTURE.md](./ARCHITECTURE.md)  
 > **Feature specs:** [requirements/README.md](./requirements/README.md)  
-> **Last audited:** 2026-06-24 (Sprint 9 sort polish: `postSortRows`, `accentedSort`, `paginationAutoPageSize`)  
-> **Tests:** 253 passing · 253 total · 52 test files · **Packages shipped:** 11 (`core`, `dom-renderer`, `sort`, `filter`, `pagination`, `infinite-row-model`, `locale-en`, `react`, `vanilla`, `vue`, `svelte`)  
+> **Last audited:** 2026-06-27 (custom cell editors T2-ED-06 — React portals + vanilla `CellEditor` host; `registerCellEditor`)  
+> **Tests:** 306 passing · 306 total · 66 test files · **Packages shipped:** 14 (`core`, `dom-renderer`, `sort`, `filter`, `pagination`, `infinite-row-model`, `locale-en`, `tempo`, `drag-and-drop`, `react`, `vanilla`, `vue`, `svelte`, `visual-regression`)  
 > **CI:** Node 24 · pnpm 11.8.0 · build · typecheck · test · bundle-size gate · axe-core (vanilla demo) — `perf-100k` manual only, not in CI
 
 ---
@@ -15,7 +15,7 @@
 |--------|-------|
 | **Current phase** | **Phase 1 — Foundation (MVP)** largely complete; **Phase 2 — Editing & Data** in progress (Sprints 1–7 done) |
 | **Tier 1 completion** | **~76%** (core T1 feature set + quality gates shipped; API docs + migration parity remain) |
-| **Tier 2 completion** | **~78%** (Sprint 9 multi-sort + client pagination done; drag reorder deferred; migration guide draft + TypeDoc scaffold remain) |
+| **Tier 2 completion** | **~85%** (custom filter host + doesFilterPass; visual regression baseline captured; migration polish remain) |
 | **Tier 3 completion** | **~0%** (specs only) |
 | **Overall v1 scope** | **~32%** (weighted across T1–T3) |
 
@@ -23,7 +23,7 @@
 
 **Critical gaps before Tier 1 exit:** API docs (`GridOptions`, `GridApi`, Tier 1 events), AG Grid getting-started tutorial parity (≤20% mapping changes), 100k perf benchmark in CI.
 
-**Critical gaps before Tier 2 exit (Sprint 8–9):** column drag reorder (deferred), RTL + custom filter components, migration guide polish + per-method TypeDoc examples, visual regression baseline.
+**Critical gaps before Tier 2 exit (Sprint 8–10):** RTL layout, migration guide polish + per-method TypeDoc examples.
 
 ---
 
@@ -53,7 +53,7 @@ Target: virtualized, sortable, selectable grid; React + vanilla; default theme; 
 | Workstream | Target packages | Status |
 |------------|-----------------|--------|
 | GridStore + GridEngine lifecycle | `@ol-grid/core` | **Done** — mount/destroy, `setGridOption`, `addEventListener` |
-| Column model (defs, pin-left/right, resize, flex) | `@ol-grid/core` | **Partial** — pin-left/right, resize, flex, `applyColumnState`, column groups (`buildHeaderRows`); no drag reorder |
+| Column model (defs, pin-left/right, resize, flex) | `@ol-grid/core` | **Partial** — pin-left/right, resize, flex, `applyColumnState`, column groups (`buildHeaderRows`), drag reorder within pin region |
 | CSRM + quick filter | `@ol-grid/core` | **Partial** — `applyTransaction`; column filters via `@ol-grid/filter` module |
 | Row virtualization | `@ol-grid/core` + `@ol-grid/dom-renderer` | **Partial** — fixed height, overscan 5, `ensureIndexVisible`; no dynamic row height |
 | Sort (single column) | `@ol-grid/sort` | **Done** (T1) — `comparator`, `setSortModel`/`getSortModel`, `aria-sort`; multi-column sort (T2) done Sprint 9 |
@@ -68,7 +68,7 @@ Target: AG Grid Community parity for admin grids; Vue + Svelte; filtering; infin
 
 | Workstream | Target packages | Status |
 |------------|-----------------|--------|
-| Cell editing (full T2) | core + dom (→ `@ol-grid/edit` planned) | **Partial** — text + number/select editors, Tab nav, `valueParser`, validation; custom editors T2 |
+| Cell editing (full T2) | core + dom (→ `@ol-grid/edit` planned) | **Partial** — text + number/select/date/largeText editors, Tab nav, `valueParser`, custom `CellEditor` host + React editor portals (T2-ED-06) |
 | Column filters + floating filters | `@ol-grid/filter` | **Done** (T2 core) — text/number/date filters, `setFilterModel`, header menu, floating row |
 | Infinite row model | `@ol-grid/infinite-row-model` | **Done** (T2) — datasource contract, block cache, mock REST demo |
 | Pagination mode | `@ol-grid/pagination` | **Done** (T2 CSRM) — pipeline stage, panel UI, API; SSRM server pagination T3 |
@@ -76,7 +76,7 @@ Target: AG Grid Community parity for admin grids; Vue + Svelte; filtering; infin
 | Vue + Svelte adapters | `@ol-grid/vue`, `@ol-grid/svelte` | **Partial** (T2) — composable/component, `bind:api`, controlled slices, column-filter + pagination demos; cell-renderer portals still open |
 | i18n + RTL | `@ol-grid/locale-*` | **Partial** — `@ol-grid/locale-en` + `localeText`; RTL not started |
 | Controlled mode per state slice | adapters + core | **Done** — `sortModel`, `filterModel`, `rowSelection` controlled in React/Vue/Svelte |
-| Column groups, drag reorder, auto-size API | `@ol-grid/core` | **Partial** — `buildHeaderRows`, `autoSizeAllColumns` / `sizeColumnsToFit` done; drag reorder deferred |
+| Column groups, drag reorder, auto-size API | `@ol-grid/core` | **Partial** — `buildHeaderRows`, `autoSizeAllColumns` / `sizeColumnsToFit`, `moveColumn` + header drag UI (within pin region; cross-group reorder deferred) |
 
 ### Phase 3 — Scale & Enterprise Patterns · **NOT STARTED**
 
@@ -112,7 +112,7 @@ Target: canvas renderer, column virtualization, worker offload.
 | Core engine | T1–T3 | [core-engine.md](./requirements/core-engine.md) | **Partial** | Pipeline plugin hooks; `columnApi` null; immutable CSRM mode | Expand `PluginHost`; expose `columnApi` stub | `@ol-grid/core` |
 | Grid API & events | T1–T3 | [grid-api-and-events.md](./requirements/grid-api-and-events.md) | **Partial** | Per-method TypeDoc examples; some T2/T3 API methods | Complete TypeDoc examples; publish docs site | `@ol-grid/core` |
 | Plugin & module system | T1–T3 | [plugin-module-system.md](./requirements/plugin-module-system.md) | **Partial** | Per-grid module scope (MOD-REG-05–08); filter not lazy-loaded in all paths | Per-grid registry scope; document module registration | `@ol-grid/core`, `@ol-grid/*` |
-| Column model | T1–T2 | [column-model.md](./requirements/column-model.md) | **Partial** | Drag reorder deferred | Sprint 9+ drag reorder | `@ol-grid/core` |
+| Column model | T1–T2 | [column-model.md](./requirements/column-model.md) | **Partial** | Cross-group drag reorder; controlled `columnState` | Controlled `columnState`; cross-group drag | `@ol-grid/core` |
 | Client-side row model | T1–T2 | [client-side-row-model.md](./requirements/client-side-row-model.md) | **Partial** | Immutable mode; formal multi-stage pipeline registry | Immutable CSRM option; pipeline stage registry | `@ol-grid/core` |
 | DOM renderer | T1–T3 | [dom-renderer.md](./requirements/dom-renderer.md) | **Partial** | Vue/Svelte cell-renderer portals; canvas companion DOM (T3) | Framework portal parity for Vue/Svelte | `@ol-grid/dom-renderer` |
 | Virtualization | T1–T3 | [virtualization.md](./requirements/virtualization.md) | **Partial** | Dynamic row height; column virt (T3) | `getRowHeight` cache (T2); column virt (T3) | `@ol-grid/core`, renderers |
@@ -124,8 +124,8 @@ Target: canvas renderer, column virtualization, worker offload.
 | Accessibility | T1–T3 | [accessibility.md](./requirements/accessibility.md) | **Partial** | Live regions; full WCAG AA audit; canvas companion DOM (T3) | Live region for async updates; manual audit | core + renderers |
 | Performance & bundle | T1–T3 | [performance-and-bundle.md](./requirements/performance-and-bundle.md) | **Partial** (bundle gate only) | 100k perf manual (`benchmarks/perf-100k`, not CI); 1M-row canvas (T3); perf regression CI (Should) | Add perf-100k to CI (Should); Sprint 19+ canvas | all packages |
 | AG Grid migration | T1–T3 | [ag-grid-migration.md](./requirements/ag-grid-migration.md) | **Partial** | No `@ol-grid/compat-ag-grid`; full ColDef matrix | Expand migration guide; compat shim | `@ol-grid/compat-ag-grid` (planned) |
-| Cell editing | T2 | [cell-editing.md](./requirements/cell-editing.md) | **Partial** | Custom/provided editor components; full validation UX | Custom editor host API; polish blur paths | core + dom (→ `@ol-grid/edit`) |
-| Filtering | T2–T3 | [filtering.md](./requirements/filtering.md) | **Done** (T2 core) | Custom filter components (T2); set filter (T3) | Custom filter host; set filter in Tier 3 | `@ol-grid/filter` |
+| Cell editing | T2 | [cell-editing.md](./requirements/cell-editing.md) | **Partial** | Full validation UX; Vue/Svelte editor portals | Polish blur paths; Vue/Svelte editor host | core + dom (→ `@ol-grid/edit`) |
+| Filtering | T2–T3 | [filtering.md](./requirements/filtering.md) | **Done** (T2 core + custom) | Set filter (T3) | Set filter in Tier 3 | `@ol-grid/filter` |
 | Infinite row model | T2 | [infinite-row-model.md](./requirements/infinite-row-model.md) | **Done** | — | Pagination alternative (Sprint 9) | `@ol-grid/infinite-row-model` |
 | Pagination | T2 | [pagination.md](./requirements/pagination.md) | **Done** (T2 CSRM) | SSRM server pagination (T3); `paginateChildRows` with grouping (T3) | `paginateChildRows` with grouping (T3) | `@ol-grid/pagination` |
 | Export (CSV/Excel) | T2–T3 | [export.md](./requirements/export.md) | **Done** (T2 CSV) | Excel module (T3) | `@ol-grid/excel-export` in Tier 3 | `@ol-grid/core` (CSV), `@ol-grid/excel-export` |
@@ -295,7 +295,7 @@ Assuming **2-week sprints**, one engineer (scale tasks horizontally when team gr
 
 ### Sprint 8 — Columns T2 & i18n
 - [x] Column groups (nested headers) (T2-COL-01) — `buildHeaderRows` + dom-renderer multi-row headers; React demo column groups in `datasets.ts`
-- [ ] Column drag reorder (T2-COL-02, Should) — **deferred** to Sprint 9+ (DOM drag UI + ColumnModel order API not started)
+- [x] Column drag reorder (T2-COL-02, Should) — `moveColumn` API, `onColumnMoved`, `suppressColumnMove` / `suppressMovable` / `lockPosition`, dom-renderer header drag within pin region; cross-group leaf moves deferred
 - [x] `autoSizeAllColumns` / `sizeColumnsToFit` on API (T2-COL-03) — `ColumnModel` + `GridApi`; unit tests passing
 - [x] `@ol-grid/locale-en`; `localeText` overrides (T2-I18N-*)
 - [x] Dark mode + `prefers-color-scheme` — theme tokens in `theme.css` + `theme` option on `GridOptions`
@@ -306,7 +306,9 @@ Assuming **2-week sprints**, one engineer (scale tasks horizontally when team gr
 - [x] `colDef.sort` / `colDef.initialSort` on grid init (REQ-SORT-18) — `extractInitialSortModelFromColumnDefs`, `SortDef` + multi-key `sortIndex`, `options.sortModel` wins when provided
 - [x] Migration guide draft (§8.2) — [docs/MIGRATION.md](./docs/MIGRATION.md): multi-sort, pagination, initialSort, column groups, test IDs
 - [x] TypeDoc scaffold for `GridOptions` / `GridApi` (NFR-Q-04) — `pnpm docs` → `docs/api/`; entry points for core + modules + adapters
-- [ ] Visual regression baseline (NFR-Q-03, Should)
+- [x] Visual regression baseline (NFR-Q-03, Should) — `@ol-grid/visual-regression` with 3 PNG baselines + manifest existence test
+- [x] Vue/Svelte column groups demo parity — shared `examples/shared/datasets.ts` with Organization/Timeline groups
+- [x] Custom filter components (T2-FL-05) — `FilterComponent` host, `registerFilterComponent`, `doesFilterPass` in pipeline
 - [ ] **Tier 2 exit checklist** (§8.2 below)
 
 ### Sprints 10–14 — Tier 3 core data (grouping → SSRM)
@@ -406,17 +408,17 @@ Accurate snapshot of `packages/` for planners:
 |------|-------|------------------|
 | **Packages** | `core`, `dom-renderer`, `sort`, `filter`, `pagination`, `infinite-row-model`, `locale-en`, `react`, `vanilla`, `vue`, `svelte` (11) | 14+ planned packages from ARCHITECTURE.md §5 (grouping, SSRM, clipboard, themes, …) |
 | **Sort** | `@ol-grid/sort` — toggle, compare, `comparator`, `setSortModel`/`getSortModel`, `aria-sort`, multi-column sort (shift+click, `sortIndex`), `colDef.sort`/`initialSort` on init, `postSortRows`, `accentedSort` | worker offload (T3); SSRM pass-through (T3) |
-| **Filter** | Quick filter in core; `@ol-grid/filter` — text/number/date, `setFilterModel`, header menu, floating row | Custom filter components (T2); set filter (T3) |
-| **Edit** | Text + number/select editors, dblclick, Enter/F2/Escape, Tab/Shift+Tab, `valueParser`, validation | Custom editor components; dedicated `@ol-grid/edit` package |
+| **Filter** | Quick filter in core; `@ol-grid/filter` — text/number/date, `setFilterModel`, header menu, floating row, custom filter host + `doesFilterPass` | Set filter (T3) |
+| **Edit** | Text + number/select/date/largeText editors, dblclick, Enter/F2/Escape, Tab/Shift+Tab, `valueParser`, custom `CellEditor` + React editor portals | Dedicated `@ol-grid/edit` package; Vue/Svelte editor portals |
 | **Selection** | single/multi, checkbox col, Ctrl+click, header select-all, shift-range, `selectAll`/`deselectAll` API | Cell range selection (T3) |
 | **Virtualization** | `computeRowVirtualRange`, row recycling, translateY, `ensureIndexVisible`, left/right pin | Column virt; dynamic row height |
-| **Column model** | flex distribution, pin-left/right, resize, `applyColumnState`, `buildHeaderRows`, sizing API on `GridApi` | Drag reorder deferred |
+| **Column model** | flex distribution, pin-left/right, resize, `applyColumnState`, `buildHeaderRows`, sizing API, `moveColumn` + header drag reorder | Cross-group drag; controlled `columnState` |
 | **i18n** | `@ol-grid/locale-en`, `localeText`/`localeBundle` merge, `theme` + dark/system tokens | RTL; full string externalization audit |
 | **CSV** | `generateCsv`, `exportDataAsCsv`, `getDataAsCsv`, filtered/sorted scope, export params | Excel (T3) |
 | **Overlays** | Loading, no-rows, error overlays in dom-renderer (overlay hidden bug fixed) | — |
 | **Controlled mode** | `sortModel`, `filterModel`, `rowSelection` in React/Vue/Svelte adapters | Additional state slices as needed |
-| **Tests** | 253 tests, 52 files (all passing) | Coverage << 90% target; no visual regression baseline |
-| **Examples** | React, vanilla, vue, svelte, infinite (mock REST) | 100k in `benchmarks/` manual only; Angular; Vue/Svelte lack column groups demo |
+| **Tests** | 304 tests, 64 files (all passing) | Coverage << 90% target; visual compare opt-in (`VISUAL_REGRESSION=1`) |
+| **Examples** | React, vanilla, vue, svelte, infinite (mock REST); Vue/Svelte column groups via shared datasets | 100k in `benchmarks/` manual only; Angular |
 | **CI** | Node 24, pnpm 11.8.0 — build, typecheck, test, bundle-size, axe-core | `perf-100k` not in CI; perf regression gate (Should); TypeDoc scaffold only |
 
 ---
@@ -436,4 +438,6 @@ Accurate snapshot of `packages/` for planners:
 | 2026-06-24 | Vue/Svelte column-filter demo parity: text/number/date filters + floating filters, controlled `filterModel`, `localeBundle` prop sync; Vue adapter floating-filter test; 223/223 tests passing; §8.2 Vue/Svelte → Done |
 | 2026-06-24 | Sort polish: `colDef.sort` / `initialSort` on grid init (REQ-SORT-18), `SortDef` + multi-key `sortIndex`, unit + SortModule integration tests; 245/245 tests |
 | 2026-06-24 | Sort T2 polish: `postSortRows` callback (REQ-SORT-20), `accentedSort` locale collation (REQ-SORT-21); `paginationAutoPageSize` + viewport subscription; React `paginationPageSizeSelector` in `GRID_OPTION_KEYS`; 253/253 tests |
-| 2026-06-24 | Sprint 9 docs: [docs/MIGRATION.md](./docs/MIGRATION.md) draft, TypeDoc config (`pnpm docs`), `docs/README.md`, test-id exports from dom-renderer |
+| 2026-06-24 | Sprint 10: column drag reorder — `moveColumn` API, `onColumnMoved`, `suppressColumnMove`, dom-renderer header drag UI within pin region, grouped same-parent reorder; 267/267 tests |
+| 2026-06-24 | Vendored FormKit integration: `@ol-grid/tempo` in `@ol-grid/filter` date filtering (`parse`/`dayStart`/`dayEnd`/`sameDay`); `@ol-grid/drag-and-drop` utilities in dom-renderer `column-header-drag.ts` adapter (drop index + drag classes; `moveColumn` remains source of truth) |
+| 2026-06-27 | Visual regression baselines captured (3 PNGs); Vue/Svelte column groups via `examples/shared/datasets.ts`; custom filter components (T2-FL-05) — `FilterComponent` interface, `registerFilterComponent`, dom-renderer popup host, pipeline `doesFilterPass`; 304/304 tests |

@@ -7,7 +7,7 @@ import {
   getDataset,
   type DatasetId,
   type DemoColumnDef,
-} from "./datasets";
+} from "../../shared/datasets";
 
 const COLUMN_CONFIG_HEADERS = [
   "colId",

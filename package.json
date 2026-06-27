@@ -8,6 +8,7 @@
     "dev": "turbo run dev",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:visual": "VISUAL_REGRESSION=1 vitest run visual-regression",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rm -rf node_modules",
     "bundle-size": "pnpm --filter @ol-grid/benchmarks run bundle-size",

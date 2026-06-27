@@ -21,7 +21,7 @@ export interface RenderHeaderCell {
   gridRow?: number;
   colSpan?: number;
   rowSpan?: number;
-  filterType?: "text" | "number" | "date" | null;
+  filterType?: "text" | "number" | "date" | "custom" | null;
   filterActive?: boolean;
   floatingFilter?: boolean;
   filterParams?: Record<string, unknown>;
@@ -52,13 +52,28 @@ function resolveFilterType<TData>(
   return null;
 }
 
+function resolveColumnFilterKind<TData>(
+  colDef: ColumnDef<TData>,
+): "text" | "number" | "date" | "custom" | null {
+  const provided = resolveFilterType(colDef);
+  if (provided) return provided;
+  const filter = colDef.filter;
+  if (typeof filter === "function") return "custom";
+  if (typeof filter === "string" && filter !== "text" && filter !== "number" && filter !== "date") {
+    return "custom";
+  }
+  return null;
+}
+
 function resolveFloatingFilter<TData>(
   colDef: ColumnDef<TData>,
   defaultColDef?: Partial<ColumnDef<TData>>,
 ): boolean {
   if (colDef.floatingFilter === false) return false;
-  if (colDef.floatingFilter === true) return resolveFilterType(colDef) !== null;
-  if (defaultColDef?.floatingFilter === true) return resolveFilterType(colDef) !== null;
+  const kind = resolveColumnFilterKind(colDef);
+  if (kind === "custom") return false;
+  if (colDef.floatingFilter === true) return kind !== null;
+  if (defaultColDef?.floatingFilter === true) return kind !== null;
   return false;
 }
 
@@ -79,6 +94,14 @@ function isFilterModelEntryActive(model: unknown): boolean {
       return !!entry.dateFrom || !!entry.dateTo;
     }
     return !!entry.dateFrom;
+  }
+  if (entry.filterType === "custom") {
+    for (const [key, value] of Object.entries(entry)) {
+      if (key === "filterType") continue;
+      if (Array.isArray(value)) return value.length > 0;
+      if (value != null && value !== "") return true;
+    }
+    return false;
   }
   return false;
 }
@@ -246,7 +269,7 @@ function buildRowsForRegion<TData>(
       const colId = regionLeafColIds[leafPointer++]!;
       const column = columnByColId.get(colId);
       const merged = defaultColDef ? { ...defaultColDef, ...def } : def;
-      const filterType = resolveFilterType(merged);
+      const filterType = resolveColumnFilterKind(merged);
       const leafCell: RenderHeaderCell = {
         kind: "leaf",
         colId,

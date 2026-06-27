@@ -20,13 +20,21 @@ export default defineConfig({
       "@ol-grid/vanilla": path.join(root, "packages/vanilla/src/index.ts"),
       "@ol-grid/vue": path.join(root, "packages/vue/src/index.ts"),
       "@ol-grid/svelte": path.join(root, "packages/svelte/src/index.ts"),
+      "@ol-grid/drag-and-drop": path.join(root, "packages/drag-and-drop/src/index.ts"),
+      "@ol-grid/drag-and-drop/react": path.join(root, "packages/drag-and-drop/src/react/index.ts"),
+      "@ol-grid/drag-and-drop/vue": path.join(root, "packages/drag-and-drop/src/vue/index.ts"),
+      "@ol-grid/drag-and-drop/solid": path.join(root, "packages/drag-and-drop/src/solid/index.ts"),
+      "@ol-grid/tempo": path.join(root, "packages/tempo/src/index.ts"),
     },
   },
   test: {
     globals: true,
     environment: "node",
     setupFiles: ["./vitest.setup.ts"],
-    include: ["packages/**/src/**/__tests__/**/*.test.{ts,tsx}"],
+    include: [
+      "packages/**/src/**/__tests__/**/*.test.{ts,tsx}",
+      "visual-regression/__tests__/**/*.test.ts",
+    ],
     environmentMatchGlobs: [
       ["packages/dom-renderer/**/__tests__/**/*.test.ts", "happy-dom"],
       ["packages/core/src/engine/__tests__/grid-engine*.test.ts", "happy-dom"],

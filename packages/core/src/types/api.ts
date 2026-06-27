@@ -80,6 +80,7 @@ export interface GridApi<TData = unknown> {
   ensureIndexVisible(rowIndex: number, position?: "top" | "middle" | "bottom"): void;
   getColumnState(): ColumnState[];
   applyColumnState(params: ApplyColumnStateParams): boolean;
+  moveColumn(colKey: string, toIndex: number): void;
   setQuickFilterText(text: string): void;
   setFilterModel(model: Record<string, unknown> | null): void;
   getFilterModel(): Record<string, unknown>;

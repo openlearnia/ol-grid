@@ -1,3 +1,4 @@
+import { date, dayEnd, dayStart, sameDay } from "@ol-grid/tempo";
 import type { DateFilterModel } from "./types.js";
 
 function toTimestamp(value: unknown): number | null {
@@ -9,35 +10,28 @@ function toTimestamp(value: unknown): number | null {
   if (typeof value === "number" && !Number.isNaN(value)) {
     return value;
   }
-  const parsed = Date.parse(String(value));
-  return Number.isNaN(parsed) ? null : parsed;
+  try {
+    return date(String(value)).getTime();
+  } catch {
+    return null;
+  }
 }
 
-function parseDateInput(value: string | null | undefined): number | null {
+function parseDateInput(value: string | null | undefined): Date | null {
   if (!value) return null;
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
-function startOfDay(timestamp: number): number {
-  const date = new Date(timestamp);
-  date.setHours(0, 0, 0, 0);
-  return date.getTime();
-}
-
-/** Inclusive day boundaries — filter inputs are date-only strings from `<input type="date">`. */
-function endOfDay(timestamp: number): number {
-  const date = new Date(timestamp);
-  date.setHours(23, 59, 59, 999);
-  return date.getTime();
+  try {
+    return date(value);
+  } catch {
+    return null;
+  }
 }
 
 export function doesDateFilterPass(value: unknown, model: DateFilterModel): boolean {
   const cellTime = toTimestamp(value);
-  const fromTime = parseDateInput(model.dateFrom);
-  const toTime = parseDateInput(model.dateTo ?? null);
+  const fromDate = parseDateInput(model.dateFrom);
+  const toDate = parseDateInput(model.dateTo ?? null);
 
-  if (fromTime === null && model.type !== "inRange") {
+  if (fromDate === null && model.type !== "inRange") {
     return true;
   }
 
@@ -45,18 +39,22 @@ export function doesDateFilterPass(value: unknown, model: DateFilterModel): bool
     return false;
   }
 
+  const cellDate = new Date(cellTime);
+
   switch (model.type) {
     case "equals":
-      return fromTime !== null && cellTime >= startOfDay(fromTime) && cellTime <= endOfDay(fromTime);
+      return fromDate !== null && sameDay(cellDate, fromDate);
     case "notEqual":
-      return fromTime !== null && (cellTime < startOfDay(fromTime) || cellTime > endOfDay(fromTime));
+      return fromDate !== null && !sameDay(cellDate, fromDate);
     case "lessThan":
-      return fromTime !== null && cellTime < startOfDay(fromTime);
+      return fromDate !== null && cellTime < dayStart(fromDate).getTime();
     case "greaterThan":
-      return fromTime !== null && cellTime > endOfDay(fromTime);
+      return fromDate !== null && cellTime > dayEnd(fromDate).getTime();
     case "inRange":
-      if (fromTime === null || toTime === null) return true;
-      return cellTime >= startOfDay(fromTime) && cellTime <= endOfDay(toTime);
+      if (fromDate === null || toDate === null) return true;
+      return (
+        cellTime >= dayStart(fromDate).getTime() && cellTime <= dayEnd(toDate).getTime()
+      );
     default:
       return true;
   }

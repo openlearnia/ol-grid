@@ -1,5 +1,9 @@
 export { DomRenderer, createDomRenderer } from "./dom-renderer.js";
 export {
+  simulateColumnHeaderDrag,
+  simulateColumnHeaderDragOver,
+} from "./column-header-dnd.js";
+export {
   gridTestId,
   bodyViewportTestId,
   centerViewportTestId,
